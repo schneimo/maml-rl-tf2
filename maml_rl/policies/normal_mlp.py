@@ -1,8 +1,4 @@
 import math
-#import torch
-#import torch.nn as nn
-#import torch.nn.functional as F
-#from torch.distributions import Normal
 
 import tensorflow as tf
 import tensorflow.keras as keras
@@ -32,11 +28,8 @@ class NormalMLPPolicy(Policy):
             #self.add_module('layer{0}'.format(i), nn.Linear(layer_sizes[i - 1], layer_sizes[i]))
             # TODO: Why do we add those here, when we dont use them really in forward?
             self.add(keras.layers.Dense(layer_sizes[i], input_shape=(layer_sizes[i - 1],)))
-        #self.mu = nn.Linear(layer_sizes[-1], output_size)
         self.mu = keras.layers.Dense(output_size, input_shape=(layer_sizes[-1],))
 
-        #self.sigma = nn.Parameter(torch.Tensor(output_size))
-        #self.sigma.data.fill_(math.log(init_std))
         sigma_init = tf.constant_initializer(value=math.log(init_std))
         self.sigma = tf.Variable(initial_value=sigma_init(shape=(output_size,), dtype='float32'), trainable=True)
 
@@ -47,16 +40,10 @@ class NormalMLPPolicy(Policy):
             params = OrderedDict(self.named_parameters())
         output = input
         for i in range(1, self.num_layers):
-            #output = F.linear(output,
-            #                  weight=params['layer{0}.weight'.format(i)],
-            #                  bias=params['layer{0}.bias'.format(i)])
-
             weight = params['layer{0}.weight'.format(i)]
             bias = params['layer{0}.bias'.format(i)]
             output = tf.matmul(output, weight) + bias
             output = self.nonlinearity(output)
-        #mu = tf.nn.linear(output, weight=params['mu.weight'],
-        #    bias=params['mu.bias'])
         weight = params['mu.weight'.format(self.num_layers)]
         bias = params['mu.weight'.format(self.num_layers)]
         mu = tf.matmul(output, weight) + bias

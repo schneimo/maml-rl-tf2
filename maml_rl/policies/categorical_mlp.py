@@ -1,8 +1,3 @@
-#import torch
-#import torch.nn as nn
-#import torch.nn.functional as F
-#from torch.distributions import Categorical
-
 import tensorflow as tf
 import tensorflow.keras as keras
 
@@ -37,18 +32,10 @@ class CategoricalMLPPolicy(Policy):
             params = OrderedDict(self.named_parameters())
         output = input
         for i in range(1, self.num_layers):
-            #output = F.linear(output,
-            #                  weight=params['layer{0}.weight'.format(i)],
-            #                  bias=params['layer{0}.bias'.format(i)])
-
             weight = params['layer{0}.weight'.format(i)]
             bias = params['layer{0}.bias'.format(i)]
             output = tf.matmul(output, weight) + bias
             output = self.nonlinearity(output)
-
-        #logits = F.linear(output,
-        #                  weight=params['layer{0}.weight'.format(self.num_layers)],
-        #                  bias=params['layer{0}.bias'.format(self.num_layers)])
 
         weight = params['layer{0}.weight'.format(self.num_layers)]
         bias = params['layer{0}.bias'.format(self.num_layers)]

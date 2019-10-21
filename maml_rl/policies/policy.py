@@ -1,6 +1,3 @@
-#import torch
-#import torch.nn as nn
-
 import tensorflow as tf
 import tensorflow.keras as keras
 
@@ -9,7 +6,6 @@ from collections import OrderedDict
 
 def weight_init(module):
     if isinstance(module, keras.layers.Dense):
-        # nn.init.xavier_uniform_(module.weight)
         keras.initializers.glorot_uniform(module.weight)
         module.bias.data.zero_()
 
