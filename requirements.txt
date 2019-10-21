@@ -1,0 +1,4 @@
+numpy>=1.14.0
+tensorflow>=2.0.0
+tensorflow-probability>=0.8.0
+gym[mujoco]>=0.10.5
