@@ -1,7 +1,7 @@
 # Reinforcement Learning with Model-Agnostic Meta-Learning (MAML) in TensorFlow 2
-Implementation of Model-Agnostic Meta-Learning (MAML) applied on Reinforcement Learning problems in TensorFlow 2. 
+Working on the implementation of *Model-Agnostic Meta-Learning (MAML)* applied on Reinforcement Learning problems in TensorFlow 2. 
 
-This repo was heavily inspired by the original implementation [cbfinn/maml_rl](https://github.com/cbfinn/maml_rl/) and a very clear implementation from students at MILA [tristandeleu/pytorch-maml-rl](https://github.com/tristandeleu/pytorch-maml-rl). I totally recommend to check out both implementations too.
+This repo is heavily inspired by the original implementation [cbfinn/maml_rl](https://github.com/cbfinn/maml_rl/) and a very clear implementation from students at MILA [tristandeleu/pytorch-maml-rl](https://github.com/tristandeleu/pytorch-maml-rl). I totally recommend to check out both implementations too.
 
 ## WIP
 This repo is currently under work.
