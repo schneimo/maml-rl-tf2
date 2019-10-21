@@ -4,7 +4,7 @@ Working on the implementation of *Model-Agnostic Meta-Learning (MAML)* applied o
 This repo is heavily inspired by the original implementation [cbfinn/maml_rl](https://github.com/cbfinn/maml_rl/) and a very clear implementation from students at MILA [tristandeleu/pytorch-maml-rl](https://github.com/tristandeleu/pytorch-maml-rl). I totally recommend to check out both implementations too.
 
 ## WIP
-This repo is currently under work.
+This repo is currently *under construction*.
 
 ## References
 This project is, for the most part, a reproduction of the original implementation [cbfinn/maml_rl](https://github.com/cbfinn/maml_rl/) in TensorFlow 2. These experiments are based on the paper
