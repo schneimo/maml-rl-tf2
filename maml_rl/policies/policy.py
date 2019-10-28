@@ -10,7 +10,7 @@ def weight_init(module):
         module.bias.data.zero_()
 
 
-class Policy(keras.Sequential):
+class Policy(tf.Module):
     def __init__(self, input_size, output_size):
         super(Policy, self).__init__()
         self.input_size = input_size
@@ -21,9 +21,10 @@ class Policy(keras.Sequential):
         step-size `step_size`, and returns the updated parameters of the neural 
         network.
         """
-        grads = torch.autograd.grad(loss, self.parameters(), create_graph=not first_order)
+        #grads = torch.autograd.grad(loss, self.parameters(), create_graph=not first_order)
+        grads = tf.gradients(loss, self.trainable_variables) # TODO: use of tf.GradientTape
         updated_params = OrderedDict()
-        for (name, param), grad in zip(self.named_parameters(), grads):
+        for (name, param), grad in zip(self.trainable_variables, grads):
             updated_params[name] = param - step_size * grad
 
         return updated_params

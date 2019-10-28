@@ -1,6 +1,9 @@
 import tensorflow as tf
 import tensorflow.keras as keras
 
+import tensorflow_probability as tfp
+
+tfd = tfp.distributions
 
 from collections import OrderedDict
 from maml_rl.policies.policy import Policy, weight_init
@@ -12,6 +15,7 @@ class CategoricalMLPPolicy(Policy):
     with discrete action spaces (eg. `TabularMDPEnv`). The code is adapted from 
     https://github.com/cbfinn/maml_rl/blob/9c8e2ebd741cb0c7b8bf2d040c4caeeb8e06cc95/sandbox/rocky/tf/policies/maml_minimal_categorical_mlp_policy.py
     """
+
     def __init__(self, input_size, output_size,
                  hidden_sizes=(), nonlinearity=tf.nn.relu):
         super(CategoricalMLPPolicy, self).__init__(
@@ -41,4 +45,4 @@ class CategoricalMLPPolicy(Policy):
         bias = params['layer{0}.bias'.format(self.num_layers)]
         logits = tf.matmul(output, weight) + bias
 
-        return tf.random.categorical(logits=logits, num_samples=1) #TODO: mu should be 0D tensor!?
+        return tfd.Categorical(logits=logits)
