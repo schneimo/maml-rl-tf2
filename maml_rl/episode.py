@@ -57,8 +57,8 @@ class BatchEpisodes(object):
         if self._returns is None:
             return_ = np.zeros(self.batch_size, dtype=np.float32)
             returns = np.zeros((len(self), self.batch_size), dtype=np.float32)
-            rewards = self.rewards.cpu().numpy()
-            mask = self.mask.cpu().numpy()
+            rewards = self.rewards#.cpu().numpy()
+            mask = self.mask#.cpu().numpy()
             for i in range(len(self) - 1, -1, -1):
                 return_ = self.gamma * return_ + rewards[i] * mask[i]
                 returns[i] = return_
@@ -78,19 +78,23 @@ class BatchEpisodes(object):
     def gae(self, values, tau=1.0):
         # Add an additional 0 at the end of values for
         # the estimation at the end of the episode
-        values = values.squeeze(2)  # .detach() # TODO: Maybe stop_gradient instead of detach
+        values = tf.squeeze(values, axis=2)  # .detach() # TODO: Maybe stop_gradient instead of detach
         # values = F.pad(values * self.mask, (0, 0, 0, 1))
         # Padding with (0, 0, 0, 1) means in PyTorch to pad the first dimension with 1
         values = tf.pad(values * self.mask, [[0, 1], [0, 0]])
 
         deltas = self.rewards + self.gamma * values[1:] - values[:-1]
-        advantages = tf.zeros_like(deltas).float()
-        gae = tf.zeros_like(deltas[0]).float()
+        advantages = tf.TensorArray(tf.float32, *deltas.shape)
+        gae = tf.zeros_like(deltas[0], dtype=tf.float32)
+
+        #path["advantages"] = utils.discount_cumsum(
+        #        deltas, self.discount * self.gae_lambda)
+
         for i in range(len(self) - 1, -1, -1):
             gae = gae * self.gamma * tau + deltas[i]
-            advantages[i] = gae
-
-        return advantages
+            advantages = advantages.write(i, gae)
+        advantages = advantages.stack()
+        return tf.reshape(advantages, shape=(1, advantages.shape[-1]))
 
     def append(self, observations, actions, rewards, batch_ids):
         for observation, action, reward, batch_id in zip(

@@ -9,10 +9,10 @@ def weighted_mean(tensor, axis=None, weights=None):
         out = tf.reduce_mean(tensor)
     if axis is None:
         out = tf.reduce_sum(tensor * weights)
-        out.divide(tf.reduce_sum(weights))
+        out = out / tf.reduce_sum(weights)
     else:
         mean_dim = tf.reduce_sum(tensor * weights, axis=axis)
-        mean_dim.divide(tf.reduce_sum(weights, axis=axis))
+        mean_dim = mean_dim/(tf.reduce_sum(weights, axis=axis))
         out = tf.reduce_mean(mean_dim)
     return out
 
@@ -21,7 +21,7 @@ def weighted_normalize(tensor, axis=None, weights=None, epsilon=1e-8):
     mean = weighted_mean(tensor, axis=axis, weights=weights)
     out = tensor * (1 if weights is None else weights) - mean
     std = tf.math.sqrt(weighted_mean(out ** 2, axis=axis, weights=weights))
-    out.divide(std + epsilon)
+    out = out/(std + epsilon)
     return out
 
 

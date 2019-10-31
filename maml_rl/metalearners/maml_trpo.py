@@ -43,7 +43,7 @@ class MetaLearner(BaseMetaLearner):
         self.fast_lr = fast_lr
         self.tau = tau
 
-    @tf.function
+    #@tf.function
     def inner_loss(self, episodes, params=None):
         """Compute the inner loss for the one-step gradient update. The inner 
         loss is REINFORCE with baseline [2], computed on advantages estimated 
@@ -55,14 +55,14 @@ class MetaLearner(BaseMetaLearner):
 
         pi = self.policy(episodes.observations, params=params)
         log_probs = pi.log_prob(episodes.actions)
-        if log_probs.dim() > 2:
+        if len(log_probs.shape) > 2:
             log_probs = tf.reduce_sum(log_probs, axis=2)
-        loss = -weighted_mean(log_probs * advantages, dim=0,
+        loss = -weighted_mean(log_probs * advantages,
+                              axis=0,
                               weights=episodes.mask)
-
         return loss
 
-    @tf.function
+    #@tf.function
     def adapt(self,
               episodes,
               first_order=False):
@@ -71,11 +71,16 @@ class MetaLearner(BaseMetaLearner):
         """
         # Fit the baseline to the training episodes
         self.baseline.fit(episodes)
-        # Get the loss on the training episodes
-        loss = self.inner_loss(episodes)
-        # Get the new parameters after a one-step gradient update
-        params = self.policy.update_params(loss, step_size=self.fast_lr, first_order=first_order)
 
+        # Get the loss on the training episodes
+        with tf.GradientTape() as tape:
+            loss = self.inner_loss(episodes)
+
+        # Get the gradient of the loss
+        grads = tape.gradient(loss, self.policy.trainable_variables)
+
+        # Get the new parameters after a one-step gradient update
+        params = self.policy.update_params(grads, step_size=self.fast_lr, first_order=first_order)
         return params
 
     def sample(self, tasks, first_order=False):
@@ -96,7 +101,7 @@ class MetaLearner(BaseMetaLearner):
             episodes.append((train_episodes, valid_episodes))
         return episodes
 
-    @tf.function
+    #@tf.function
     def kl_divergence(self, episodes, old_pis=None):
         """
 
@@ -124,7 +129,7 @@ class MetaLearner(BaseMetaLearner):
         # return torch.mean(torch.stack(kls, dim=0))
         return tf.reduce_mean(tf.stack(kls, axis=0))
 
-    @tf.function
+    #@tf.function
     def hessian_vector_product(self, episodes, damping=1e-2):
         """Hessian-vector product, based on the Perlmutter method.
 
@@ -157,7 +162,7 @@ class MetaLearner(BaseMetaLearner):
 
         return _product
 
-    @tf.function
+    #@tf.function
     def surrogate_loss(self, episodes, old_pis=None):
         """
 
@@ -178,11 +183,11 @@ class MetaLearner(BaseMetaLearner):
                 old_pi = detach_distribution(pi)
 
             values = self.baseline(valid_episodes)
-            advantages = valid_episodes.gae(values, tau=self.tau)
+            advantages = valid_episodes.gae(values, tau=self.tau)  #TODO: Recalculation of the advantages is not necessary
             advantages = weighted_normalize(advantages, weights=valid_episodes.mask)
 
             log_ratio = (pi.log_prob(valid_episodes.actions) - old_pi.log_prob(valid_episodes.actions))
-            if log_ratio.dim() > 2:
+            if len(log_ratio.shape) > 2:
                 log_ratio = tf.reduce_sum(log_ratio, axis=2)
             ratio = tf.exp(log_ratio)
 
@@ -192,14 +197,17 @@ class MetaLearner(BaseMetaLearner):
             losses.append(loss)
 
             mask = valid_episodes.mask
-            if valid_episodes.actions.dim() > 2:
-                mask = mask.unsqueeze(2)
+            if len(valid_episodes.actions.shape) > 2:
+                mask = mask.expand_dim(axis=2)
             kl = weighted_mean(distributions.kl_divergence(pi, old_pi),
                                axis=0,
                                weights=mask)
             kls.append(kl)
 
-        return tf.reduce_mean(tf.stack(losses, axis=0)), tf.reduce_mean(tf.stack(kls, axis=0)), pis
+        mean_outer_kl = tf.reduce_mean(tf.stack(kls, axis=0))
+        meta_objective = tf.reduce_mean(tf.stack(losses, axis=0))
+
+        return meta_objective, mean_outer_kl, pis
 
     def step(self,
              episodes,
@@ -223,7 +231,7 @@ class MetaLearner(BaseMetaLearner):
         set_from_flat = SetFromFlat(self.policy.trainable_variables)
         get_flat = GetFlat(self.policy.trainable_variables)
 
-        with tf.GradientTape as tape:
+        with tf.GradientTape() as tape:
             old_loss, _, old_pis = self.surrogate_loss(episodes)
         grads = tape.gradient(old_loss, self.policy.trainable_variables)
         grads = flatgrad(grads, self.policy.trainable_variables)
@@ -235,7 +243,7 @@ class MetaLearner(BaseMetaLearner):
                                      grads,
                                      cg_iters=cg_iters)
 
-        assert np.isfinite(stepdir).all()
+        assert np.isfinite(stepdir).all(), 'stepdir not finite'
 
         # Compute the Lagrange multiplier
         # Hessian vector product already produces the inner product H dot x
@@ -251,7 +259,7 @@ class MetaLearner(BaseMetaLearner):
         # Line search
         step_size = 1.0
         for _ in range(ls_max_steps):
-            new_params = old_params - step_size * step
+            new_params = old_params - step_size * step  # TODO: +
             set_from_flat(new_params)
             loss, kl, _ = self.surrogate_loss(episodes, old_pis=old_pis)
             improvement = loss - old_loss

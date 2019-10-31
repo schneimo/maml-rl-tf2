@@ -5,8 +5,8 @@ import tensorflow_probability as tfp
 
 tfd = tfp.distributions
 
-from collections import OrderedDict
-from maml_rl.policies.policy import Policy, weight_init
+from maml_rl.policies.policy import Policy
+from maml_rl.policies.distributions import CategoricalPdType
 
 
 class CategoricalMLPPolicy(Policy):
@@ -23,26 +23,39 @@ class CategoricalMLPPolicy(Policy):
         self.hidden_sizes = hidden_sizes
         self.nonlinearity = nonlinearity
         self.num_layers = len(hidden_sizes) + 1
+        self.params = []
 
         layer_sizes = (input_size,) + hidden_sizes + (output_size,)
-        for i in range(1, self.num_layers):
-            # self.add_module('layer{0}'.format(i), nn.Linear(layer_sizes[i - 1], layer_sizes[i]))
-            # TODO: Why do we add those here, when we dont use them really in forward?
-            self.add(keras.layers.Dense(layer_sizes[i], input_shape=(layer_sizes[i - 1],)))
-        self.apply(weight_init)
+        w_init = keras.initializers.glorot_uniform()
+        b_init = tf.zeros_initializer()
+        for i in range(1, self.num_layers + 1):
+            weight = tf.Variable(initial_value=w_init(shape=(layer_sizes[i - 1], layer_sizes[i]), dtype='float32'),
+                                 name='layer{0}.weight'.format(i),
+                                 trainable=True)
+            bias = tf.Variable(initial_value=b_init(shape=(layer_sizes[i],), dtype='float32'),
+                               name='layer{0}.bias'.format(i),
+                               trainable=True)
+            self.params.append((weight, bias))
+
+        self._dist = CategoricalPdType((layer_sizes[-1],), output_size)
 
     def forward(self, input, params=None):
         if params is None:
-            params = OrderedDict(self.named_parameters())
+            params = self.trainable_variables  #OrderedDict(self.trainable_variables)
+            params_dict = dict((x.name, x) for x in params)
+        else:
+            params_dict = params
         output = input
         for i in range(1, self.num_layers):
-            weight = params['layer{0}.weight'.format(i)]
-            bias = params['layer{0}.bias'.format(i)]
+            weight = params_dict['layer{0}.weight:0'.format(i)]
+            bias = params_dict['layer{0}.bias:0'.format(i)]
             output = tf.matmul(output, weight) + bias
             output = self.nonlinearity(output)
 
-        weight = params['layer{0}.weight'.format(self.num_layers)]
-        bias = params['layer{0}.bias'.format(self.num_layers)]
+        weight = params_dict['layer{0}.weight:0'.format(self.num_layers)]
+        bias = params_dict['layer{0}.bias:0'.format(self.num_layers)]
         logits = tf.matmul(output, weight) + bias
 
-        return tfd.Categorical(logits=logits)
+        pd, pi = self._dist.pdfromlatent(logits)
+
+        return pd

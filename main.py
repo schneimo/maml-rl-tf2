@@ -28,7 +28,7 @@ def main(args):
         os.makedirs(save_folder)
     with open(os.path.join(save_folder, 'config.json'), 'w') as f:
         config = {k: v for (k, v) in vars(args).items() if k != 'device'}
-        config.update(device=args.device.type)
+        config.update(device=args.device)
         json.dump(config, f, indent=2)
 
     sampler = BatchSampler(args.env_name,
@@ -77,7 +77,7 @@ if __name__ == '__main__':
     import multiprocessing as mp
 
     parser = argparse.ArgumentParser(description='Reinforcement learning with '
-        'Model-Agnostic Meta-Learning (MAML)')
+                                                 'Model-Agnostic Meta-Learning (MAML)')
 
     # General
     parser.add_argument('--env-name', type=str,
