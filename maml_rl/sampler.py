@@ -1,14 +1,17 @@
+import multiprocessing as mp
+
 import gym
 import tensorflow as tf
-import multiprocessing as mp
 
 from maml_rl.envs.subproc_vec_env import SubprocVecEnv
 from maml_rl.episode import BatchEpisodes
+
 
 def make_env(env_name):
     def _make_env():
         return gym.make(env_name)
     return _make_env
+
 
 class BatchSampler(object):
     def __init__(self, env_name, batch_size, num_workers=mp.cpu_count() - 1):
@@ -23,11 +26,14 @@ class BatchSampler(object):
 
     def sample(self, policy, params=None, gamma=0.95):
         episodes = BatchEpisodes(batch_size=self.batch_size, gamma=gamma)
+
         for i in range(self.batch_size):
             self.queue.put(i)
         for _ in range(self.num_workers):
             self.queue.put(None)
+
         observations, batch_ids = self.envs.reset()
+
         dones = [False]
         while (not all(dones)) or (not self.queue.empty()):
             observations_tensor = observations
@@ -37,6 +43,7 @@ class BatchSampler(object):
             new_observations, rewards, dones, new_batch_ids, _ = self.envs.step(actions)
             episodes.append(observations, actions, rewards, batch_ids)
             observations, batch_ids = new_observations, new_batch_ids
+
         return episodes
 
     def reset_task(self, task):

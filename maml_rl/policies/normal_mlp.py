@@ -1,21 +1,20 @@
 import math
+from collections import OrderedDict
 
-import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
-import tensorflow_probability as tfp
 
-tfd = tfp.distributions
-
-from collections import OrderedDict
-from maml_rl.policies.policy import Policy, weight_init
+from maml_rl.policies.distributions import DiagGaussianPdType
+from maml_rl.policies.policy import Policy
 
 
 class NormalMLPPolicy(Policy):
     """Policy network based on a multi-layer perceptron (MLP), with a 
     `Normal` distribution output, with trainable standard deviation. This 
     policy network can be used on tasks with continuous action spaces (eg. 
-    `HalfCheetahDir`). The code is adapted from 
+    `HalfCheetahDir`).
+
+    The code is adapted from
     https://github.com/cbfinn/maml_rl/blob/9c8e2ebd741cb0c7b8bf2d040c4caeeb8e06cc95/sandbox/rocky/tf/policies/maml_minimal_gauss_mlp_policy.py
     """
 
@@ -28,32 +27,42 @@ class NormalMLPPolicy(Policy):
         self.nonlinearity = nonlinearity
         self.min_log_std = math.log(min_std)
         self.num_layers = len(hidden_sizes) + 1
+        self.all_params = []
 
         layer_sizes = (input_size,) + hidden_sizes
+        w_init = keras.initializers.glorot_uniform()
+        b_init = tf.zeros_initializer()
+
+        # Create all parameters
         for i in range(1, self.num_layers):
-            # self.add_module('layer{0}'.format(i), nn.Linear(layer_sizes[i - 1], layer_sizes[i]))
-            # TODO: Why do we add those here, when we dont use them really in forward?
-            self.add(keras.layers.Dense(layer_sizes[i], input_shape=(layer_sizes[i - 1],)))
-        self.mu = keras.layers.Dense(output_size, input_shape=(layer_sizes[-1],))
+            with tf.name_scope('layer{0}'.format(i)):
+                weight = tf.Variable(initial_value=w_init(shape=(layer_sizes[i - 1], layer_sizes[i]), dtype='float32'),
+                                     name='weight',
+                                     trainable=True)
+                bias = tf.Variable(initial_value=b_init(shape=(layer_sizes[i],), dtype='float32'),
+                                   name='bias',
+                                   trainable=True)
+                self.all_params.append((weight, bias))
 
-        sigma_init = tf.constant_initializer(value=math.log(init_std))
-        self.sigma = tf.Variable(initial_value=sigma_init(shape=(output_size,), dtype='float32'), trainable=True)
+        self._dist = DiagGaussianPdType((layer_sizes[-1],), output_size, init_scale=math.log(init_std))
 
-        self.apply(weight_init)
+    def get_trainable_variables(self):
+        return self.trainable_variables
 
     def forward(self, input, params=None):
-        if params is None:
-            params = OrderedDict(self.named_parameters())
         output = input
+        if params is None:
+            train_vars = self.get_trainable_variables()
+            params_dict = OrderedDict((x.name, x) for x in train_vars)
+        else:
+            params_dict = params
         for i in range(1, self.num_layers):
-            weight = params['layer{0}.weight'.format(i)]
-            bias = params['layer{0}.bias'.format(i)]
-            output = tf.matmul(output, weight) + bias
+            weight = params_dict['layer{0}/weight:0'.format(i)]
+            bias = params_dict['layer{0}/bias:0'.format(i)]
+            output = tf.matmul(output, weight)
+            output = tf.add(output, bias)
             output = self.nonlinearity(output)
-        weight = params['mu.weight'.format(self.num_layers)]
-        bias = params['mu.weight'.format(self.num_layers)]
-        mu = tf.matmul(output, weight) + bias
 
-        scale = tf.math.exp(tf.clip_by_value(params['sigma'], min=self.min_log_std), max=np.inf)  # TODO: Max infinity?
+        pd, pi = self._dist.pdfromlatent(output)
 
-        return tfd.Normal(loc=mu, scale=scale)
+        return pd

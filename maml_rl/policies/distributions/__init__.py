@@ -1,1 +1,2 @@
-from .distributions import make_pdtype, CategoricalPdType, DiagGaussianPdType
+from .categorical import CategoricalPdType, CategoricalPd
+from .diag_gaussian import DiagGaussianPd, DiagGaussianPdType

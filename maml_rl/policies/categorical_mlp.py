@@ -1,12 +1,10 @@
+from collections import OrderedDict
+
 import tensorflow as tf
 import tensorflow.keras as keras
 
-import tensorflow_probability as tfp
-
-tfd = tfp.distributions
-
-from maml_rl.policies.policy import Policy
 from maml_rl.policies.distributions import CategoricalPdType
+from maml_rl.policies.policy import Policy
 
 
 class CategoricalMLPPolicy(Policy):
@@ -28,34 +26,37 @@ class CategoricalMLPPolicy(Policy):
         layer_sizes = (input_size,) + hidden_sizes + (output_size,)
         w_init = keras.initializers.glorot_uniform()
         b_init = tf.zeros_initializer()
-        for i in range(1, self.num_layers + 1):
+        for i in range(1, self.num_layers):
             weight = tf.Variable(initial_value=w_init(shape=(layer_sizes[i - 1], layer_sizes[i]), dtype='float32'),
-                                 name='layer{0}.weight'.format(i),
+                                 name='layer{0}/weight'.format(i),
                                  trainable=True)
             bias = tf.Variable(initial_value=b_init(shape=(layer_sizes[i],), dtype='float32'),
-                               name='layer{0}.bias'.format(i),
+                               name='layer{0}/bias'.format(i),
                                trainable=True)
             self.params.append((weight, bias))
 
         self._dist = CategoricalPdType((layer_sizes[-1],), output_size)
 
+    def get_trainable_variables(self):
+        return self.trainable_variables + self._dist.trainable_variables
+
     def forward(self, input, params=None):
         if params is None:
-            params = self.trainable_variables  #OrderedDict(self.trainable_variables)
-            params_dict = dict((x.name, x) for x in params)
+            vars = self.get_trainable_variables() #OrderedDict(self.trainable_variables)
+            params_dict = OrderedDict((x.name, x) for x in vars)
         else:
             params_dict = params
         output = input
         for i in range(1, self.num_layers):
-            weight = params_dict['layer{0}.weight:0'.format(i)]
-            bias = params_dict['layer{0}.bias:0'.format(i)]
+            weight = params_dict['layer{0}/weight:0'.format(i)]
+            bias = params_dict['layer{0}/bias:0'.format(i)]
             output = tf.matmul(output, weight) + bias
             output = self.nonlinearity(output)
 
-        weight = params_dict['layer{0}.weight:0'.format(self.num_layers)]
-        bias = params_dict['layer{0}.bias:0'.format(self.num_layers)]
-        logits = tf.matmul(output, weight) + bias
+        #weight = params_dict['layer{0}.weight:0'.format(self.num_layers)]
+        #bias = params_dict['layer{0}.bias:0'.format(self.num_layers)]
+        #logits = tf.matmul(output, weight) + bias
 
-        pd, pi = self._dist.pdfromlatent(logits)
+        pd, pi = self._dist.pdfromlatent(output)
 
         return pd

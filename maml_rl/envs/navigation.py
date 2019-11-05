@@ -1,8 +1,8 @@
-import numpy as np
-
 import gym
+import numpy as np
 from gym import spaces
 from gym.utils import seeding
+
 
 class Navigation2DEnv(gym.Env):
     """2D navigation problems, as described in [1]. The code is adapted from 

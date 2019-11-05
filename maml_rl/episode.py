@@ -35,7 +35,7 @@ class BatchEpisodes(object):
         if self._actions is None:
             action_shape = self._actions_list[0][0].shape
             actions = np.zeros((len(self), self.batch_size)
-                               + action_shape, dtype=np.float32)
+                               + action_shape, dtype=self._actions_list[0][0].dtype)
             for i in range(self.batch_size):
                 length = len(self._actions_list[i])
                 actions[:length, i] = np.stack(self._actions_list[i], axis=0)
@@ -72,14 +72,13 @@ class BatchEpisodes(object):
             for i in range(self.batch_size):
                 length = len(self._actions_list[i])
                 mask[:length, i] = 1.0
-            self._mask = mask  # TODO: mask is numpy, so use convert_to_tensor() maybe?
+            self._mask = mask
         return self._mask
 
     def gae(self, values, tau=1.0):
         # Add an additional 0 at the end of values for
         # the estimation at the end of the episode
         values = tf.squeeze(values, axis=2)  # .detach() # TODO: Maybe stop_gradient instead of detach
-        # values = F.pad(values * self.mask, (0, 0, 0, 1))
         # Padding with (0, 0, 0, 1) means in PyTorch to pad the first dimension with 1
         values = tf.pad(values * self.mask, [[0, 1], [0, 0]])
 
@@ -87,14 +86,12 @@ class BatchEpisodes(object):
         advantages = tf.TensorArray(tf.float32, *deltas.shape)
         gae = tf.zeros_like(deltas[0], dtype=tf.float32)
 
-        #path["advantages"] = utils.discount_cumsum(
-        #        deltas, self.discount * self.gae_lambda)
-
         for i in range(len(self) - 1, -1, -1):
             gae = gae * self.gamma * tau + deltas[i]
             advantages = advantages.write(i, gae)
         advantages = advantages.stack()
-        return tf.reshape(advantages, shape=(1, advantages.shape[-1]))
+        # tf.reshape(advantages, shape=(1, advantages.shape[-1]))
+        return advantages
 
     def append(self, observations, actions, rewards, batch_ids):
         for observation, action, reward, batch_id in zip(
@@ -102,7 +99,7 @@ class BatchEpisodes(object):
             if batch_id is None:
                 continue
             self._observations_list[batch_id].append(observation.astype(np.float32))
-            self._actions_list[batch_id].append(action.astype(np.float32))
+            self._actions_list[batch_id].append(action.astype(action.dtype)) #action.astype(np.float32)
             self._rewards_list[batch_id].append(reward.astype(np.float32))
 
     def __len__(self):

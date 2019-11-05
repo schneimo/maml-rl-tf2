@@ -1,8 +1,8 @@
-import numpy as np
-
 import gym
+import numpy as np
 from gym import spaces
 from gym.utils import seeding
+
 
 class BernoulliBanditEnv(gym.Env):
     """Multi-armed bandit problems with Bernoulli observations, as described

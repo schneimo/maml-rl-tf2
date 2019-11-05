@@ -1,5 +1,5 @@
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
 
 
 def conjugate_gradient_tf(Ax, b, cg_iters=10, residual_tol=1e-10):
@@ -8,20 +8,21 @@ def conjugate_gradient_tf(Ax, b, cg_iters=10, residual_tol=1e-10):
     """
     p = tf.identity(b)
     r = tf.identity(b)
-    x = tf.zeros_like(b).float()
-    rdotr = tf.tensordot(r, r, axis=1)
+    x = tf.zeros_like(b, dtype=tf.float32)
+    rdotr = tf.tensordot(r, r, axes=1)
 
     for i in range(cg_iters):
         z = Ax(p)
-        v = rdotr / tf.tensordot(p, z, axis=1)
+        v = rdotr / tf.tensordot(p, z, axes=1)
         x += v * p
         r -= v * z
-        newrdotr = tf.tensordot(r, r, axis=1)
+        newrdotr = tf.tensordot(r, r, axes=1)
         mu = newrdotr / rdotr
         p = r + mu * p
 
         rdotr = newrdotr
-        if rdotr.item() < residual_tol:
+        assert tf.rank(rdotr) == 0
+        if rdotr < residual_tol:
             break
 
     return x

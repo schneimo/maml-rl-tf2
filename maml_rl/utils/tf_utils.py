@@ -1,7 +1,13 @@
 import numpy as np
 import tensorflow as tf
-import tensorflow_probability as tfp
-tfd = tfp.distributions
+
+from maml_rl.policies import CategoricalMLPPolicy, NormalMLPPolicy
+from maml_rl.policies.distributions import CategoricalPd, DiagGaussianPd, CategoricalPdType, DiagGaussianPdType
+
+"""
+Code partially adapted from
+https://github.com/openai/baselines/blob/tf2/baselines/common/distributions.py
+"""
 
 
 def weighted_mean(tensor, axis=None, weights=None):
@@ -25,15 +31,28 @@ def weighted_normalize(tensor, axis=None, weights=None, epsilon=1e-8):
     return out
 
 
-def detach_distribution(pi):
-    if isinstance(pi, tfd.Categorical):
-        distribution = tfd.Categorical(logits=pi.logits)
-    elif isinstance(pi, tfd.Normal):
-        distribution = tfd.Normal(loc=pi.loc, scale=pi.scale)
+def linear(input, weight, bias=None):
+    # type: (Tensor, Tensor, Optional[Tensor]) -> Tensor
+    r"""
+    Applies a linear transformation to the incoming data: :math:`y = xA^T + b`.
+
+    Shape:
+
+        - Input: :math:`(N, *, in\_features)` where `*` means any number of
+          additional dimensions
+        - Weight: :math:`(out\_features, in\_features)`
+        - Bias: :math:`(out\_features)`
+        - Output: :math:`(N, *, out\_features)`
+    """
+    if input.dim() == 2 and bias is not None:
+        # fused op is marginally faster
+        ret = tf.addmm(bias, input, weight.t())
     else:
-        raise NotImplementedError('Only `Categorical` and `Normal` '
-                                  'policies are valid policies.')
-    return distribution
+        output = tf.matmul(input, weight, transpose_b=True)
+        if bias is not None:
+            output += bias
+        ret = output
+    return ret
 
 
 # ================================================================
@@ -89,3 +108,49 @@ class GetFlat(object):
 
 def flattenallbut0(x):
     return tf.reshape(x, [-1, intprod(x.get_shape().as_list()[1:])])
+
+
+# ================================================================
+# Distributions
+# ================================================================
+
+def make_pdtype(latent_shape, ac_space, init_scale=1.0):
+    from gym import spaces
+    if isinstance(ac_space, spaces.Box):
+        assert len(ac_space.shape) == 1
+        return DiagGaussianPdType(latent_shape, ac_space.shape[0], init_scale)
+    elif isinstance(ac_space, spaces.Discrete):
+        return CategoricalPdType(latent_shape, ac_space.n, init_scale)
+    else:
+        raise ValueError('No implementation for {}'.format(ac_space))
+
+
+def detach_distribution(pi):
+    if isinstance(pi, CategoricalPd):
+        distribution = CategoricalPd(logits=pi.logits)
+    elif isinstance(pi, DiagGaussianPd):
+        pdparam = tf.concat([pi.mean, pi.mean * 0.0 + pi.logstd], axis=-1)
+        distribution = DiagGaussianPd(pdparam)
+    else:
+        raise NotImplementedError('Only `Categorical` and `Normal` '
+                                  'policies are valid policies.')
+    return distribution
+
+
+# TODO: Search for a better way to clone a tf.Module
+def clone_distribution(pi):
+    if isinstance(pi, CategoricalMLPPolicy):
+        old_pi = CategoricalMLPPolicy()
+    elif isinstance(pi, NormalMLPPolicy):
+        old_pi = NormalMLPPolicy() # TODO: Arguments
+    else:
+        raise NotImplementedError('Only `Categorical` and `Normal` '
+                                  'policies are valid policies at the moment.')
+
+    old_pi_vars = old_pi.get_trainable_variables()
+    pi_vars = pi.get_trainable_variables()
+
+    for pi_var, old_pi_var in zip(pi_vars, old_pi_vars):
+        old_pi_var.assign(pi_var)
+
+    return old_pi

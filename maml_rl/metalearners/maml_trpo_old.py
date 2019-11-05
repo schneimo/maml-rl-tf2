@@ -31,7 +31,6 @@ class MetaLearner(BaseMetaLearner):
                  sampler,
                  policy,
                  baseline,
-                 optimizer,
                  gamma=0.95,
                  fast_lr=0.5,
                  tau=1.0
@@ -42,7 +41,6 @@ class MetaLearner(BaseMetaLearner):
         self.gamma = gamma
         self.fast_lr = fast_lr
         self.tau = tau
-        self.optimizer = optimizer
 
     #@tf.function
     def inner_loss(self, episodes, params=None):
@@ -119,6 +117,69 @@ class MetaLearner(BaseMetaLearner):
         return episodes
 
     #@tf.function
+    def kl_divergence(self, episodes, old_pis=None):
+        """
+
+        Arguments:
+            episodes:   sampled trajectories
+            old_pis:    old policy distribution before an update
+        """
+        kls = []
+        if old_pis is None:
+            old_pis = [None] * len(episodes)
+
+        for (train_episodes, valid_episodes), old_pi in zip(episodes, old_pis):
+            params = self.adapt(train_episodes)
+            pi = self.policy(valid_episodes.observations, params=params)  # Returns a distribution
+
+            if old_pi is None:
+                old_pi = detach_distribution(pi)
+
+            mask = valid_episodes.mask
+            if len(valid_episodes.actions.shape) > 2:
+                mask = tf.expand_dims(mask, 2)
+
+            # Calculate the the KL-divergence between the old and the new policy distribution
+            kl = weighted_mean(old_pi.kl_divergence(pi), axis=0, weights=mask)
+            kls.append(kl)
+
+        return tf.reduce_mean(tf.stack(kls, axis=0))
+
+    #@tf.function
+    def hessian_vector_product(self, episodes, damping=1e-2):
+        """Hessian-vector product, based on the Perlmutter method.
+
+        Theoretical derivation: http://www.bcl.hamilton.ie/~barak/papers/nc-hessian.pdf
+
+        Arguments:
+            episodes:   sampled trajectories
+            damping:    damping factor
+        """
+
+        def _product(vector):
+            """
+            Arguments:
+                vector:
+            """
+            # Outer gradient
+            train_vars = self.policy.get_trainable_variables()
+            with tf.GradientTape() as outter_tape:
+                # Inner gradient
+                with tf.GradientTape() as inner_tape:
+                    kl = self.kl_divergence(episodes)
+                # First derivative
+                grads = inner_tape.gradient(kl, train_vars)
+                flat_grad_kl = flatgrad(grads, train_vars)
+                grad_kl_v = tf.tensordot(flat_grad_kl, vector, axes=1)
+            # Second derivative
+            grad2s = outter_tape.gradient(grad_kl_v, train_vars)
+            flat_grad2_kl = flatgrad(grad2s, train_vars)
+
+            return flat_grad2_kl + damping * vector
+
+        return _product
+
+    #@tf.function
     def surrogate_loss(self, episodes, old_pis=None):
         """
 
@@ -167,18 +228,75 @@ class MetaLearner(BaseMetaLearner):
 
         return meta_objective, mean_outer_kl, pis
 
-    def step(self, episodes):
+    def step(self,
+             episodes,
+             kl_limit=1e-3,
+             cg_iters=10,
+             cg_damping=1e-2,
+             ls_max_steps=10,
+             ls_backtrack_ratio=0.5):
         """Meta-optimization step (ie. update of the initial parameters), based 
         on Trust Region Policy Optimization (TRPO, [4]).
 
         Arguments:
             episodes:               sampled trajectories
+            kl_limit:               max KL divergence between old policy and new policy ( KL(pi_old || pi) )
+            cg_iters:               number of iterations of conjugate gradient algorithm
+            cg_damping:             conjugate gradient damping
+            ls_max_steps:           max steps of line search
+            ls_backtrack_ratio:     backtrack ratio of line search
+
         """
         train_vars = self.policy.get_trainable_variables()
+        set_from_flat = SetFromFlat(train_vars)
+        get_flat = GetFlat(train_vars)
 
         with tf.GradientTape() as tape:
             old_loss, _, old_pis = self.surrogate_loss(episodes)
         grads = tape.gradient(old_loss, train_vars)
         grads = flatgrad(grads, train_vars)
 
-        self.optimizer.optimize(grads, episodes)
+        # TODO: Implement own optimizer classes and replace the following with calls to the class methods
+
+        # Compute the step direction with Conjugate Gradient
+        hessian_vector_product = self.hessian_vector_product(episodes,
+                                                             damping=cg_damping)
+        stepdir = conjugate_gradient(hessian_vector_product,
+                                     grads,
+                                     cg_iters=cg_iters)
+
+        assert np.isfinite(stepdir).all(), 'stepdir not finite'
+
+        # Compute the Lagrange multiplier
+        # Hessian vector product already produces the inner product H dot x
+        # TODO: Using np.dot() instead of tf.tensordot()?
+        shs = np.dot(stepdir, hessian_vector_product(stepdir))
+        lagrange_multiplier = np.sqrt(2 * kl_limit / (shs + 1e-10))
+
+        step = stepdir * lagrange_multiplier
+
+        # Save the old parameters
+        old_params = get_flat()
+
+        # Line search
+        step_size = 1.0
+        for _ in range(ls_max_steps):
+            new_params = old_params - step_size * step
+            set_from_flat(new_params)
+            loss, kl, _ = self.surrogate_loss(episodes, old_pis=old_pis)
+            improvement = loss - old_loss
+            if (improvement.numpy() < 0.0) and (kl.numpy() < kl_limit):
+                print("surrogate didn't improve. shrinking step.")
+                break
+            elif not np.isfinite(loss).all():
+                print("Got non-finite value of losses -- bad!")
+            elif kl.numpy() > kl_limit * 1.5:
+                print(f"{kl.numpy()} > {kl_limit * 1.5}; violated KL constraint. shrinking step.")
+                #break
+            else:
+                print("Stepsize OK!")
+                break
+            step_size *= ls_backtrack_ratio
+        else:
+            print("couldn't compute a good step")
+            set_from_flat(old_params)

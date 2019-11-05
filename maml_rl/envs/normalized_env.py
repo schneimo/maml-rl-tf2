@@ -1,6 +1,7 @@
-import numpy as np
 import gym
+import numpy as np
 from gym import spaces
+
 
 class NormalizedActionWrapper(gym.ActionWrapper):
     """Environment wrapper to normalize the action space to [-1, 1]. This 

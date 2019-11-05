@@ -1,7 +1,9 @@
-import numpy as np
 import multiprocessing as mp
-import gym
 import sys
+
+import gym
+import numpy as np
+
 is_py2 = (sys.version[0] == '2')
 if is_py2:
     import Queue as queue

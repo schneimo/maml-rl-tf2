@@ -1,19 +1,20 @@
-import maml_rl.envs
-import gym
-import numpy as np
-import tensorflow as tf
 import json
 
+import numpy as np
+import tensorflow as tf
+
+from maml_rl.baselines import LinearFeatureBaseline
 from maml_rl.metalearners import MetaLearner
 from maml_rl.policies import CategoricalMLPPolicy, NormalMLPPolicy
-from maml_rl.baseline import LinearFeatureBaseline
+from maml_rl.optimizers import ConjugateGradientOptimizer
 from maml_rl.sampler import BatchSampler
 
 
 def total_rewards(episodes_rewards, aggregation=tf.reduce_mean):
-    rewards = tf.math.reduce_mean(tf.stack([aggregation(tf.reduce_sum(rewards, dim=0))
-                                            for rewards in episodes_rewards], dim=0))
-    return rewards.item()
+    rewards = tf.math.reduce_mean(tf.stack([aggregation(tf.reduce_sum(rewards, axis=0))
+                                            for rewards in episodes_rewards], axis=0))
+    assert tf.rank(rewards) == 0
+    return rewards
 
 
 def main(args):
@@ -46,29 +47,38 @@ def main(args):
             sampler.envs.action_space.n,
             hidden_sizes=(args.hidden_size,) * args.num_layers)
 
-    # TODO: Other value network?
-    baseline = LinearFeatureBaseline(
-        int(np.prod(sampler.envs.observation_space.shape)))
+    baseline = LinearFeatureBaseline(int(np.prod(sampler.envs.observation_space.shape)))
 
-    metalearner = MetaLearner(sampler, policy, baseline, gamma=args.gamma,
-                              fast_lr=args.fast_lr, tau=args.tau)
+    optimizer = ConjugateGradientOptimizer(args.cg_damping, args.cg_iters,
+                                           args.ls_backtrack_ratio, args.ls_max_steps, args.max_kl, policy)
+
+    metalearner = MetaLearner(sampler,
+                              policy,
+                              baseline,
+                              optimizer=optimizer,
+                              gamma=args.gamma,
+                              fast_lr=args.fast_lr,
+                              tau=args.tau)
+
+    optimizer.setup(metalearner)
 
     for batch in range(args.num_batches):
+        print(f"----------Batch number {batch+1}----------")
         tasks = sampler.sample_tasks(num_tasks=args.meta_batch_size)
-        episodes = metalearner.sample(tasks, first_order=args.first_order)
-        metalearner.step(episodes, kl_limit=args.max_kl, cg_iters=args.cg_iters,
-                         cg_damping=args.cg_damping, ls_max_steps=args.ls_max_steps,
-                         ls_backtrack_ratio=args.ls_backtrack_ratio)
+        episodes = metalearner.sample(tasks,
+                                      first_order=args.first_order)
+        metalearner.step(episodes)
 
         with writer.as_default():
             tf.summary.scalar('total_rewards/before_update', total_rewards([ep.rewards for ep, _ in episodes]), batch)
             tf.summary.scalar('total_rewards/after_update', total_rewards([ep.rewards for _, ep in episodes]), batch)
             writer.flush()
 
-        # Save policy network
-        with open(os.path.join(save_folder,
-                'policy-{0}.pt'.format(batch)), 'wb') as f:
-            policy.save(policy.state_dict(), f)
+        if batch % args.save_iters == 0:
+            # Save policy network
+
+            tf.saved_model.save(policy, save_folder)
+            print(f"Policy saved at iteration {batch+1}")
 
 
 if __name__ == '__main__':
@@ -122,6 +132,8 @@ if __name__ == '__main__':
                         help='name of the output folder')
     parser.add_argument('--num-workers', type=int, default=mp.cpu_count() - 1,
                         help='number of workers for trajectories sampling')
+    parser.add_argument('--save-iters', type=int, default=10,
+                        help='Number of iterations to pass so that the policy will be saved')
     parser.add_argument('--device', type=str, default='cpu',
                         help='set the device (cpu or cuda)')
 
@@ -132,9 +144,5 @@ if __name__ == '__main__':
         os.makedirs('./logs')
     if not os.path.exists('./saves'):
         os.makedirs('./saves')
-
-    # Slurm
-    if 'SLURM_JOB_ID' in os.environ:
-        args.output_folder += '-{0}'.format(os.environ['SLURM_JOB_ID'])
 
     main(args)
