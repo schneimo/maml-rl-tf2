@@ -82,6 +82,12 @@ def main(args):
 
 
 if __name__ == '__main__':
+    print('-------------------------------------\n'
+          'ATTENTION: \n'
+          'This code is not usable at the moment, since the gradients are not calculated correctly at the moment.\n'
+          'I will fix this ASAP.\n'
+          '-------------------------------------')
+
     import argparse
     import os
     import multiprocessing as mp
