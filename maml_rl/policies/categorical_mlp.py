@@ -35,28 +35,44 @@ class CategoricalMLPPolicy(Policy):
                                trainable=True)
             self.params.append((weight, bias))
 
+        with tf.name_scope('pd'):
+            weight = tf.Variable(initial_value=w_init(shape=(layer_sizes[-1], output_size), dtype='float32'),
+                                 name='kernel',
+                                 trainable=True)
+            self.all_params[weight.name] = weight
+
+            bias = tf.Variable(initial_value=b_init(shape=(output_size,), dtype='float32'),
+                               name='bias',
+                               trainable=True)
+            self.all_params[bias.name] = bias
+
         self._dist = CategoricalPdType((layer_sizes[-1],), output_size)
 
     def get_trainable_variables(self):
         return self.trainable_variables + self._dist.trainable_variables
 
-    def forward(self, input, params=None):
+    def forward(self, x, params=None):
         if params is None:
-            vars = self.get_trainable_variables() #OrderedDict(self.trainable_variables)
-            params_dict = OrderedDict((x.name, x) for x in vars)
+            vars = self.get_trainable_variables()
+            params_dict = OrderedDict((v.name, v) for v in vars)
         else:
             params_dict = params
-        output = input
+
+        # Forward pass through the MLP layers
+        output = tf.convert_to_tensor(x)
         for i in range(1, self.num_layers):
-            weight = params_dict['layer{0}/weight:0'.format(i)]
-            bias = params_dict['layer{0}/bias:0'.format(i)]
-            output = tf.matmul(output, weight) + bias
+            layer_name = self.scope + f'/layer{i}/'
+            weight = params_dict[layer_name + 'weight:0'.format(i)]
+            bias = params_dict[layer_name + 'bias:0'.format(i)]
+            output = tf.matmul(output, weight)
+            output = tf.add(output, bias)
             output = self.nonlinearity(output)
 
-        #weight = params_dict['layer{0}.weight:0'.format(self.num_layers)]
-        #bias = params_dict['layer{0}.bias:0'.format(self.num_layers)]
-        #logits = tf.matmul(output, weight) + bias
+        weight = params_dict[self.scope + "/pd/kernel:0"]
+        bias = params_dict[self.scope + "/pd/bias:0"]
+        output = tf.matmul(output, weight)
+        logit = tf.add(output, bias)
 
-        pd, pi = self._dist.pdfromlatent(output)
+        pd, pi = self._dist.pdfromlatent(logit, params=params_dict)
 
         return pd

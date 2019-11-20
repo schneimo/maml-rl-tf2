@@ -1,10 +1,7 @@
-import numpy as np
 import tensorflow as tf
 
 from maml_rl.metalearners.basemetalearner import BaseMetaLearner
-from maml_rl.utils.optimization import conjugate_gradient_tf as conjugate_gradient
-from maml_rl.utils.tf_utils import weighted_mean, detach_distribution, weighted_normalize, flatgrad, SetFromFlat, \
-    GetFlat
+from maml_rl.utils.tf_utils import weighted_mean, weighted_normalize, flatgrad, clone_policy, detach_distribution
 
 
 class MetaLearner(BaseMetaLearner):
@@ -38,13 +35,17 @@ class MetaLearner(BaseMetaLearner):
                  ):
         self.sampler = sampler
         self.policy = policy
+        #with tf.name_scope('old_policy'):
+        #    self.old_policy = clone_policy(policy)
         self.baseline = baseline
         self.gamma = gamma
         self.fast_lr = fast_lr
         self.tau = tau
         self.optimizer = optimizer
+        self.params = list()
 
     #@tf.function
+    # episodes --> obs, actions, masks,
     def inner_loss(self, episodes, params=None):
         """
         Compute the inner loss for the one-step gradient update. The inner
@@ -56,7 +57,7 @@ class MetaLearner(BaseMetaLearner):
             params:     parameters of the policy to calculate the probs
         """
         values = self.baseline(episodes)
-        advantages = tf.stop_gradient(episodes.gae(values, tau=self.tau))
+        advantages = episodes.gae(values, tau=self.tau)
         advantages = weighted_normalize(advantages, weights=episodes.mask)
 
         pi = self.policy(episodes.observations, params=params)
@@ -69,9 +70,8 @@ class MetaLearner(BaseMetaLearner):
         return loss
 
     #@tf.function
-    def adapt(self,
-              episodes,
-              first_order=False):
+    # episodes --> returns, obs, masks, actions
+    def adapt(self, episodes, first_order=False):
         """
         Adapt the parameters of the policy network to a new task, from
         sampled trajectories `episodes`, with a one-step gradient update [1].
@@ -105,12 +105,14 @@ class MetaLearner(BaseMetaLearner):
             first_order:    determines if first order gradients should be used
         """
         episodes = []
-        for task in tasks:
+        for idx, task in enumerate(tasks):
             self.sampler.reset_task(task)
             train_episodes = self.sampler.sample(self.policy,
                                                  gamma=self.gamma)
 
             params = self.adapt(train_episodes, first_order=first_order)
+
+            self.params.append(params)
 
             valid_episodes = self.sampler.sample(self.policy,
                                                  params=params,
@@ -119,6 +121,7 @@ class MetaLearner(BaseMetaLearner):
         return episodes
 
     #@tf.function
+    # episodes --> returns, obs, masks, actions
     def surrogate_loss(self, episodes, old_pis=None):
         """
 
@@ -130,25 +133,31 @@ class MetaLearner(BaseMetaLearner):
         if old_pis is None:
             old_pis = [None] * len(episodes)
 
+        # TODO: Refractoring for tf.function?
         for (train_episodes, valid_episodes), old_pi in zip(episodes, old_pis):
             params = self.adapt(train_episodes)
             pi = self.policy(valid_episodes.observations, params=params)
-            pis.append(pi) #pis.append(detach_distribution(pi))
+            pis.append(detach_distribution(pi))
+            #with tf.name_scope('copied_policy'):
+            #    copied_policy = clone_policy(self.policy, params, with_names=True)
+            #pi = copied_policy(valid_episodes.observations)  # Returns a distribution
+            #pis.append(pi) #pis.append(detach_distribution(policy))
 
             if old_pi is None:
                 old_pi = detach_distribution(pi)
+                #self.old_policy.set_params_with_name(params)
+                #old_pi = self.old_policy(valid_episodes.observations)
 
             values = self.baseline(valid_episodes)
-            advantages = valid_episodes.gae(values, tau=self.tau)  #TODO: Recalculation of the advantages is not necessary
+            advantages = valid_episodes.gae(values, tau=self.tau)
             advantages = weighted_normalize(advantages, weights=valid_episodes.mask)
 
-            log_ratio = (pi.log_prob(valid_episodes.actions)
-                         - tf.stop_gradient(old_pi.log_prob(valid_episodes.actions)))  # TODO: detach old_pi from graph
+            # Calculate the surrogate advantage
+            log_ratio = (pi.log_prob(valid_episodes.actions) - old_pi.log_prob(valid_episodes.actions))
             if len(log_ratio.shape) > 2:
                 log_ratio = tf.reduce_sum(log_ratio, axis=2)
             ratio = tf.exp(log_ratio)
 
-            # TODO: use reduce_mean?
             loss = -weighted_mean(ratio * advantages,
                                   axis=0,
                                   weights=valid_episodes.mask)
@@ -181,4 +190,4 @@ class MetaLearner(BaseMetaLearner):
         grads = tape.gradient(old_loss, train_vars)
         grads = flatgrad(grads, train_vars)
 
-        self.optimizer.optimize(grads, episodes)
+        self.optimizer.optimize(grads, episodes, self.params)

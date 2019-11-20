@@ -27,6 +27,8 @@ class LinearFeatureBaseline(Baseline):
     def feature_size(self):
         return 2 * self.input_size + 4
 
+    #@tf.function
+    # episodes --> obs, masks
     def _feature(self, episodes):
         ones = tf.expand_dims(episodes.mask, axis=2)
         observations = episodes.observations * ones
@@ -35,6 +37,8 @@ class LinearFeatureBaseline(Baseline):
 
         return tf.concat([observations, observations ** 2, al, al ** 2, al ** 3, ones], axis=2)
 
+    #@tf.function
+    # episodes --> returns, obs, masks
     def fit(self, episodes):
         # sequence_length * batch_size x feature_size
         featmat = tf.reshape(self._feature(episodes), shape=(-1, self.feature_size))

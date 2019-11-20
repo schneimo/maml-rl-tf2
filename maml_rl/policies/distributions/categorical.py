@@ -15,13 +15,14 @@ https://github.com/openai/baselines/blob/tf2/baselines/common/distributions.py
 class CategoricalPdType(PdType):
     def __init__(self, latent_shape, ncat, init_scale=1.0, init_bias=0.0):
         self.ncat = ncat
-        self.matching_fc = matching_fc(latent_shape, 'pi', self.ncat, init_scale=init_scale, init_bias=init_bias)
+        #self.matching_fc = matching_fc(latent_shape, 'pd', self.ncat, init_scale=init_scale, init_bias=init_bias)
 
     def pdclass(self):
         return CategoricalPd
 
-    def pdfromlatent(self, latent_vector):
-        pdparam = self.matching_fc(latent_vector)
+    def pdfromlatent(self, latent_vector, params=None):
+        #pdparam = self.matching_fc(latent_vector)
+        pdparam = latent_vector
         return self.pdfromflat(pdparam), pdparam
 
     def param_shape(self):

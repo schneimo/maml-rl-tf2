@@ -75,9 +75,30 @@ class PdType(tf.Module):
 # Build and get parameters
 # ================================================================
 
+def _fc(input_shape, scope, nh, *, init_scale=1.0, init_bias=0.0):
+    w_init = tf.keras.initializers.glorot_uniform()
+    b_init = tf.constant_initializer(init_bias)
+    with tf.name_scope(scope):
+        weight = tf.Variable(initial_value=w_init(shape=(input_shape[0], nh), dtype='float32'),
+                             name='kernel',
+                             trainable=True)
+        bias = tf.Variable(initial_value=b_init(shape=(nh,), dtype='float32'),
+                           name='bias',
+                           trainable=True)
+
+    def func(output):
+        output = tf.matmul(output, weight)
+        output = tf.add(output, bias)
+        return output
+
+    params = (weight, bias)
+
+    return func, params
+
+
 def fc(input_shape, scope, nh, *, init_scale=1.0, init_bias=0.0):
     with tf.name_scope(scope):
-        layer = tf.keras.layers.Dense(units=nh, kernel_initializer=ortho_init(init_scale),
+        layer = tf.keras.layers.Dense(units=nh, kernel_initializer=tf.keras.initializers.GlorotUniform(),
                                       bias_initializer=tf.keras.initializers.Constant(init_bias))
         layer.build(input_shape)
     return layer

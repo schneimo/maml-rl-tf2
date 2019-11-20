@@ -31,30 +31,6 @@ def weighted_normalize(tensor, axis=None, weights=None, epsilon=1e-8):
     return out
 
 
-def linear(input, weight, bias=None):
-    # type: (Tensor, Tensor, Optional[Tensor]) -> Tensor
-    r"""
-    Applies a linear transformation to the incoming data: :math:`y = xA^T + b`.
-
-    Shape:
-
-        - Input: :math:`(N, *, in\_features)` where `*` means any number of
-          additional dimensions
-        - Weight: :math:`(out\_features, in\_features)`
-        - Bias: :math:`(out\_features)`
-        - Output: :math:`(N, *, out\_features)`
-    """
-    if input.dim() == 2 and bias is not None:
-        # fused op is marginally faster
-        ret = tf.addmm(bias, input, weight.t())
-    else:
-        output = tf.matmul(input, weight, transpose_b=True)
-        if bias is not None:
-            output += bias
-        ret = output
-    return ret
-
-
 # ================================================================
 # Flat vectors (from OpenAI Baselines)
 # ================================================================
@@ -129,7 +105,9 @@ def detach_distribution(pi):
     if isinstance(pi, CategoricalPd):
         distribution = CategoricalPd(logits=pi.logits)
     elif isinstance(pi, DiagGaussianPd):
-        pdparam = tf.concat([pi.mean, pi.mean * 0.0 + pi.logstd], axis=-1)
+        mean = tf.identity(pi.mean.numpy())
+        logstd = tf.Variable(tf.identity(pi.logstd.numpy()), name='old_pi/logstd', trainable=False, dtype=tf.float32) # TODO: trainable=True?
+        pdparam = tf.concat([mean, tf.zeros_like(mean) + logstd], axis=-1)
         distribution = DiagGaussianPd(pdparam)
     else:
         raise NotImplementedError('Only `Categorical` and `Normal` '
@@ -137,20 +115,32 @@ def detach_distribution(pi):
     return distribution
 
 
-# TODO: Search for a better way to clone a tf.Module
-def clone_distribution(pi):
-    if isinstance(pi, CategoricalMLPPolicy):
-        old_pi = CategoricalMLPPolicy()
-    elif isinstance(pi, NormalMLPPolicy):
-        old_pi = NormalMLPPolicy() # TODO: Arguments
+def clone_policy(policy, params=None, with_names=False):
+
+    if params is None:
+        params = policy.get_trainable_variables()
+
+    if isinstance(policy, CategoricalMLPPolicy):
+        cloned_policy = CategoricalMLPPolicy(input_size=policy.input_size,
+                                             output_size=policy.output_size,
+                                             hidden_sizes=policy.hidden_sizes,
+                                             nonlinearity=policy.nonlinearity)
+    elif isinstance(policy, NormalMLPPolicy):
+        cloned_policy = NormalMLPPolicy(input_size=policy.input_size,
+                                        output_size=policy.output_size,
+                                        hidden_sizes=policy.hidden_sizes,
+                                        nonlinearity=policy.nonlinearity)
     else:
         raise NotImplementedError('Only `Categorical` and `Normal` '
                                   'policies are valid policies at the moment.')
 
-    old_pi_vars = old_pi.get_trainable_variables()
-    pi_vars = pi.get_trainable_variables()
+    x = tf.zeros(shape=(1, cloned_policy.input_size))
+    cloned_policy(x)
 
-    for pi_var, old_pi_var in zip(pi_vars, old_pi_vars):
-        old_pi_var.assign(pi_var)
+    if with_names:
+        cloned_policy.set_params_with_name(params)
+    else:
+        cloned_policy.set_params(params)
 
-    return old_pi
+    return cloned_policy
+

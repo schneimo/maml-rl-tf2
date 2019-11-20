@@ -1,7 +1,7 @@
 import numpy as np
 import tensorflow as tf
 
-from maml_rl.utils.tf_utils import weighted_mean, detach_distribution, flatgrad, SetFromFlat, GetFlat
+from maml_rl.utils.tf_utils import weighted_mean, clone_policy, flatgrad, SetFromFlat, GetFlat, detach_distribution
 from .base import BaseOptimizer
 
 
@@ -28,6 +28,7 @@ class ConjugateGradientOptimizer(BaseOptimizer):
         self.ls_max_steps = ls_max_steps
         self.policy = policy
 
+        self.old_policy = None
         self.meta_alg_adapt_func = None
         self.loss_func = None
 
@@ -46,9 +47,14 @@ class ConjugateGradientOptimizer(BaseOptimizer):
         for (train_episodes, valid_episodes), old_pi in zip(episodes, old_pis):
             params = self.meta_alg_adapt_func(train_episodes)
             pi = self.policy(valid_episodes.observations, params=params)  # Returns a distribution
+            #with tf.name_scope('copied_policy'):
+            #    copied_policy = clone_policy(self.policy, params, with_names=True)
+            #pi = copied_policy(valid_episodes.observations)  # Returns a distribution
 
             if old_pi is None:
                 old_pi = detach_distribution(pi)
+                #self.old_policy.set_params_with_name(params)
+                #old_pi = self.old_policy(valid_episodes.observations)
 
             mask = valid_episodes.mask
             if len(valid_episodes.actions.shape) > 2:
@@ -69,14 +75,14 @@ class ConjugateGradientOptimizer(BaseOptimizer):
             episodes:   sampled trajectories
             damping:    damping factor
         """
-
+        train_vars = self.policy.get_trainable_variables()
+        
         def _product(vector):
             """
             Arguments:
                 vector: input vector with which the hessian should be multiplied with
             """
             # Outer gradient
-            train_vars = self.policy.get_trainable_variables()
             with tf.GradientTape() as outter_tape:
                 # Inner gradient
                 with tf.GradientTape() as inner_tape:
@@ -86,14 +92,14 @@ class ConjugateGradientOptimizer(BaseOptimizer):
                 flat_grad_kl = flatgrad(grads, train_vars)
                 grad_kl_v = tf.tensordot(flat_grad_kl, vector, axes=1)
             # Second derivative
-            grad2s = outter_tape.gradient(grad_kl_v, train_vars)
+            grad2s = outter_tape.gradient(grad_kl_v, train_vars)  # TODO: gradients are not calculated correctly
             flat_grad2_kl = flatgrad(grad2s, train_vars)
 
             return flat_grad2_kl + damping * vector
 
         return _product
 
-    def optimize(self, grads, episodes):
+    def optimize(self, grads, episodes, params):
         """
         Carries out the optimization step
 
@@ -101,12 +107,12 @@ class ConjugateGradientOptimizer(BaseOptimizer):
             grads:      calculated gradients
             episodes:   episodes to calculate the improvement in conjunction with the loss func
         """
-
         train_vars = self.policy.get_trainable_variables()
         set_from_flat = SetFromFlat(train_vars)
         get_flat = GetFlat(train_vars)
 
         old_loss, _, old_pis = self.loss_func(episodes)
+        #self.old_policy.set_params(train_vars)
 
         # Compute the step direction with Conjugate Gradient
         hessian_vector_product = self.hessian_vector_product(episodes,
@@ -119,10 +125,11 @@ class ConjugateGradientOptimizer(BaseOptimizer):
 
         # Compute the Lagrange multiplier
         # Hessian vector product already produces the inner product H dot x
-        shs = np.dot(stepdir, hessian_vector_product(stepdir))
-        lagrange_multiplier = np.sqrt(2 * self.kl_limit / (shs + 1e-10))
+        shs = 0.5 * np.dot(stepdir, hessian_vector_product(stepdir))
+        #lagrange_multiplier = np.sqrt(2 * self.kl_limit / (shs + 1e-10))
+        lagrange_multiplier = np.sqrt(shs / self.kl_limit)
 
-        step = stepdir * lagrange_multiplier
+        step = stepdir / lagrange_multiplier
 
         # Save the old parameters
         old_params = get_flat()
@@ -134,20 +141,18 @@ class ConjugateGradientOptimizer(BaseOptimizer):
             set_from_flat(new_params)
             loss, kl, _ = self.loss_func(episodes, old_pis=old_pis)
             improvement = loss - old_loss
-            if (improvement.numpy() < 0.0) and (kl.numpy() < self.kl_limit):
-                print("surrogate didn't improve. shrinking step.")
-                break
+            if (improvement.numpy() > 0.0) and (kl.numpy() < self.kl_limit):
+                print("Surrogate loss didn't improve. Shrinking step.")
             elif not np.isfinite(loss).all():
                 print("Got non-finite value of losses -- bad!")
-            elif kl.numpy() > self.kl_limit * 1.5:
-                print(f"{kl.numpy()} > {self.kl_limit * 1.5}; violated KL constraint. shrinking step.")
-                #break
+            elif kl.numpy() > self.kl_limit:
+                print(f"{kl.numpy()} > {self.kl_limit}; violated KL constraint. shrinking step.")
             else:
                 print("Stepsize OK!")
                 break
             step_size *= self.ls_backtrack_ratio
         else:
-            print("couldn't compute a good step")
+            print("Couldn't compute a good step")
             set_from_flat(old_params)
 
     def setup(self, meta_alg):
@@ -159,9 +164,10 @@ class ConjugateGradientOptimizer(BaseOptimizer):
         """
         self.meta_alg_adapt_func = meta_alg.adapt
         self.loss_func = meta_alg.surrogate_loss
+        #self.old_policy = meta_alg.old_policy
 
 
-def conjugate_gradient(Ax, b, cg_iters=10, residual_tol=1e-10):
+def conjugate_gradient_tf(Ax, b, cg_iters=10, residual_tol=1e-10):
     """
     Conjugate gradient algorithm based on TensorFlow
     (see https://en.wikipedia.org/wiki/Conjugate_gradient_method)
@@ -188,16 +194,16 @@ def conjugate_gradient(Ax, b, cg_iters=10, residual_tol=1e-10):
     return x
 
 
-def conjugate_gradient_numpy(Ax, b, cg_iters=10, EPS=1e-10):
+def conjugate_gradient_np_old(Ax, b, cg_iters=10, EPS=1e-10):
     """
     Conjugate gradient algorithm based on NumPy
     (see https://en.wikipedia.org/wiki/Conjugate_gradient_method)
     """
     x = np.zeros_like(b)
-    r = b.copy()  # Note: should be 'b - Ax(x)', but for x=0, Ax(x)=0. Change if doing warm start.
+    r = b.numpy().copy()  # Note: should be 'b - Ax(x)', but for x=0, Ax(x)=0. Change if doing warm start.
     p = r.copy()
     r_dot_old = np.dot(r, r)
-    for _ in range(cg_iters):
+    for i in range(cg_iters):
         z = Ax(p)
         alpha = r_dot_old / (np.dot(p, z) + EPS)
         x += alpha * p
@@ -205,4 +211,39 @@ def conjugate_gradient_numpy(Ax, b, cg_iters=10, EPS=1e-10):
         r_dot_new = np.dot(r, r)
         p = r + (r_dot_new / r_dot_old) * p
         r_dot_old = r_dot_new
+    return x
+
+
+def conjugate_gradient(f_Ax, b, cg_iters=10, callback=None, verbose=False, residual_tol=1e-10):
+    """
+    Demmel p 312
+    """
+    p = b.numpy().copy()
+    r = b.numpy().copy()
+    x = np.zeros_like(b)
+    rdotr = r.dot(r)
+
+    fmtstr =  "%10i %10.3g %10.3g"
+    titlestr =  "%10s %10s %10s"
+    if verbose: print(titlestr % ("iter", "residual norm", "soln norm"))
+
+    for i in range(cg_iters):
+        if callback is not None:
+            callback(x)
+        if verbose: print(fmtstr % (i, rdotr, np.linalg.norm(x)))
+        z = f_Ax(p).numpy()
+        v = rdotr / p.dot(z)
+        x += v*p
+        r -= v*z
+        newrdotr = r.dot(r)
+        mu = newrdotr/rdotr
+        p = r + mu*p
+
+        rdotr = newrdotr
+        if rdotr < residual_tol:
+            break
+
+    if callback is not None:
+        callback(x)
+    if verbose: print(fmtstr % (i+1, rdotr, np.linalg.norm(x)))  # pylint: disable=W0631
     return x

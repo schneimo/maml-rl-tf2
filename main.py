@@ -36,16 +36,17 @@ def main(args):
                            batch_size=args.fast_batch_size,
                            num_workers=args.num_workers)
 
-    if continuous_actions:
-        policy = NormalMLPPolicy(
-            int(np.prod(sampler.envs.observation_space.shape)),
-            int(np.prod(sampler.envs.action_space.shape)),
-            hidden_sizes=(args.hidden_size,) * args.num_layers)
-    else:
-        policy = CategoricalMLPPolicy(
-            int(np.prod(sampler.envs.observation_space.shape)),
-            sampler.envs.action_space.n,
-            hidden_sizes=(args.hidden_size,) * args.num_layers)
+    with tf.name_scope('policy'):
+        if continuous_actions:
+            policy = NormalMLPPolicy(
+                int(np.prod(sampler.envs.observation_space.shape)),
+                int(np.prod(sampler.envs.action_space.shape)),
+                hidden_sizes=(args.hidden_size,) * args.num_layers)
+        else:
+            policy = CategoricalMLPPolicy(
+                int(np.prod(sampler.envs.observation_space.shape)),
+                sampler.envs.action_space.n,
+                hidden_sizes=(args.hidden_size,) * args.num_layers)
 
     baseline = LinearFeatureBaseline(int(np.prod(sampler.envs.observation_space.shape)))
 
@@ -82,12 +83,6 @@ def main(args):
 
 
 if __name__ == '__main__':
-    print('-------------------------------------\n'
-          'ATTENTION: \n'
-          'This code is not usable at the moment, since the gradients are not calculated correctly at the moment.\n'
-          'I will fix this ASAP.\n'
-          '-------------------------------------')
-
     import argparse
     import os
     import multiprocessing as mp

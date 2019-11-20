@@ -15,6 +15,7 @@ class Policy(tf.Module):
         super(Policy, self).__init__()
         self.input_size = input_size
         self.output_size = output_size
+        self.all_params = OrderedDict()
 
     def update_params(self, grads, step_size=0.5, first_order=False):
         """Apply one step of gradient descent on the loss function `loss`, with 
@@ -24,9 +25,19 @@ class Policy(tf.Module):
         updated_params = OrderedDict()
         params_with_name = [(x.name, x) for x in self.get_trainable_variables()]
         for (name, param), grad in zip(params_with_name, grads):
-            updated_params[name] = param - step_size * grad
+            updated_params[name] = tf.subtract(param, tf.multiply(step_size, grad))
 
         return updated_params
+
+    def set_params_with_name(self, var_list):
+        old_var_list = self.get_trainable_variables()
+        for (name, var), old_var in zip(var_list.items(), old_var_list):
+            old_var.assign(var)
+
+    def set_params(self, var_list):
+        old_var_list = self.get_trainable_variables()
+        for var, old_var in zip(var_list, old_var_list):
+            old_var.assign(var)
 
     def get_trainable_variables(self):
         return NotImplementedError
