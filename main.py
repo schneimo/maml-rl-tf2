@@ -36,12 +36,14 @@ def main(args):
                            batch_size=args.fast_batch_size,
                            num_workers=args.num_workers)
 
-    with tf.name_scope('policy'):
+    with tf.name_scope('policy') as scope:
         if continuous_actions:
             policy = NormalMLPPolicy(
                 int(np.prod(sampler.envs.observation_space.shape)),
                 int(np.prod(sampler.envs.action_space.shape)),
-                hidden_sizes=(args.hidden_size,) * args.num_layers)
+                hidden_sizes=(args.hidden_size,) * args.num_layers,
+                name=scope
+            )
         else:
             policy = CategoricalMLPPolicy(
                 int(np.prod(sampler.envs.observation_space.shape)),
@@ -77,8 +79,10 @@ def main(args):
 
         if batch % args.save_iters == 0:
             # Save policy network
-
-            tf.saved_model.save(policy, save_folder)
+            #tf.saved_model.save(policy, save_folder + f"/policy-{batch+1}")
+            policy.save_weights(save_folder + f"/policy-{batch+1}", overwrite=True)
+            #tf.saved_model.save(baseline, save_folder + f"/baseline-{batch+1}")
+            baseline.save_weights(save_folder + f"/baseline-{batch + 1}", overwrite=True)
             print(f"Policy saved at iteration {batch+1}")
 
 

@@ -19,16 +19,18 @@ class NormalMLPPolicy(Policy):
     """
 
     def __init__(self, input_size, output_size, hidden_sizes=(),
-                 nonlinearity=tf.nn.relu, init_std=1.0, min_std=1e-6):
+                 nonlinearity=tf.nn.relu, init_std=1.0, min_std=1e-6, name=None):
         super(NormalMLPPolicy, self).__init__(
             input_size=input_size,
-            output_size=output_size)
+            output_size=output_size,
+            name=name
+        )
         self.hidden_sizes = hidden_sizes
         self.nonlinearity = nonlinearity
         self.min_log_std = tf.math.log(min_std)
         self.num_layers = len(hidden_sizes) + 1
 
-        self.scope = str(self.name_scope.name).split('/')[0]
+        #self.scope = str(self.name_scope).split('/')[0]
 
         layer_sizes = (input_size,) + hidden_sizes
         w_init = keras.initializers.glorot_uniform()
@@ -60,7 +62,7 @@ class NormalMLPPolicy(Policy):
         self._dist = DiagGaussianPdType((layer_sizes[-1],), output_size, min_log_std=self.min_log_std, init_scale=np.log(init_std), )
 
     def get_trainable_variables(self):
-        return self.trainable_variables
+        return list(self.trainable_variables) + list(self._dist.trainable_variables)
 
     def forward(self, x, params=None):
         if params is None:
@@ -72,15 +74,15 @@ class NormalMLPPolicy(Policy):
         # Forward pass through the MLP layers
         output = tf.convert_to_tensor(x)
         for i in range(1, self.num_layers):
-            layer_name = self.scope + f'/layer{i}/'
+            layer_name = self.name + f'layer{i}/'
             weight = params_dict[layer_name + 'weight:0'.format(i)]
             bias = params_dict[layer_name + 'bias:0'.format(i)]
             output = tf.matmul(output, weight)
             output = tf.add(output, bias)
             output = self.nonlinearity(output)
 
-        weight = params_dict[self.scope + "/pd/kernel:0"]
-        bias = params_dict[self.scope + "/pd/bias:0"]
+        weight = params_dict[self.name + "pd/kernel:0"]
+        bias = params_dict[self.name + "pd/bias:0"]
         output = tf.matmul(output, weight)
         output = tf.add(output, bias)
 

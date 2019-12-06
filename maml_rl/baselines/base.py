@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 
-class Baseline(tf.Module):
+class Baseline(tf.keras.Model):
 
     def __init__(self):
         super(Baseline, self).__init__()

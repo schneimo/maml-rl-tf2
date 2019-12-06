@@ -10,9 +10,9 @@ def weight_init(module):
         module.bias.data.zero_()
 
 
-class Policy(tf.Module):
-    def __init__(self, input_size, output_size):
-        super(Policy, self).__init__()
+class Policy(tf.keras.Model):
+    def __init__(self, input_size, output_size, name=None):
+        super(Policy, self).__init__(name=name)
         self.input_size = input_size
         self.output_size = output_size
         self.all_params = OrderedDict()
