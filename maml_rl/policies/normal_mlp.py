@@ -30,8 +30,6 @@ class NormalMLPPolicy(Policy):
         self.min_log_std = tf.math.log(min_std)
         self.num_layers = len(hidden_sizes) + 1
 
-        #self.scope = str(self.name_scope).split('/')[0]
-
         layer_sizes = (input_size,) + hidden_sizes
         w_init = keras.initializers.glorot_uniform()
         b_init = tf.zeros_initializer()
@@ -66,7 +64,7 @@ class NormalMLPPolicy(Policy):
 
     def forward(self, x, params=None):
         if params is None:
-            vars = self.get_trainable_variables()  # OrderedDict(self.trainable_variables)
+            vars = self.get_trainable_variables()
             params_dict = OrderedDict((v.name, v) for v in vars)
         else:
             params_dict = params

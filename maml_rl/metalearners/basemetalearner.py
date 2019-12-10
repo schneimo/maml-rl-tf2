@@ -11,5 +11,5 @@ class BaseMetaLearner(object):
     def adapt(self, episodes, first_order=False):
         raise NotImplementedError
 
-    def step(self, episodes, **kwargs):
+    def step(self, episodes):
         raise NotImplementedError

@@ -15,9 +15,9 @@ class CategoricalMLPPolicy(Policy):
     """
 
     def __init__(self, input_size, output_size,
-                 hidden_sizes=(), nonlinearity=tf.nn.relu):
+                 hidden_sizes=(), nonlinearity=tf.nn.relu, name=None):
         super(CategoricalMLPPolicy, self).__init__(
-            input_size=input_size, output_size=output_size)
+            input_size=input_size, output_size=output_size, name=name)
         self.hidden_sizes = hidden_sizes
         self.nonlinearity = nonlinearity
         self.num_layers = len(hidden_sizes) + 1

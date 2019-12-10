@@ -7,6 +7,12 @@ from maml_rl.envs.subproc_vec_env import SubprocVecEnv
 from maml_rl.episode import BatchEpisodes
 
 
+"""
+The code is taken from and perhaps will be changed in the future
+https://github.com/tristandeleu/pytorch-maml-rl/blob/master/maml_rl/sampler.py
+"""
+
+
 def make_env(env_name):
     def _make_env():
         return gym.make(env_name)
@@ -26,14 +32,11 @@ class BatchSampler(object):
 
     def sample(self, policy, params=None, gamma=0.95):
         episodes = BatchEpisodes(batch_size=self.batch_size, gamma=gamma)
-
         for i in range(self.batch_size):
             self.queue.put(i)
         for _ in range(self.num_workers):
             self.queue.put(None)
-
         observations, batch_ids = self.envs.reset()
-
         dones = [False]
         while (not all(dones)) or (not self.queue.empty()):
             observations_tensor = observations

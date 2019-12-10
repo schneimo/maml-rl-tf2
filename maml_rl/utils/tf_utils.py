@@ -134,8 +134,8 @@ def clone_policy(policy, params=None, with_names=False):
         raise NotImplementedError('Only `Categorical` and `Normal` '
                                   'policies are valid policies at the moment.')
 
-    x = tf.zeros(shape=(1, cloned_policy.input_size))
-    cloned_policy(x)
+    #x = tf.zeros(shape=(1, cloned_policy.input_size))
+    #cloned_policy(x)
 
     if with_names:
         cloned_policy.set_params_with_name(params)

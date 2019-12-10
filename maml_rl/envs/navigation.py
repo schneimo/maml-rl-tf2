@@ -50,7 +50,7 @@ class Navigation2DEnv(gym.Env):
 
     def step(self, action):
         action = np.clip(action, -0.1, 0.1)
-        assert self.action_space.contains(action)
+        assert self.action_space.contains(action), f"Action {action} not in the action space"
         self._state = self._state + action
 
         x = self._state[0] - self._goal[0]
