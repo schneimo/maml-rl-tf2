@@ -13,7 +13,7 @@ python main.py --env-name 2DNavigation-v0 --num-workers 20 --fast-lr 0.1 --max-k
 This script was tested with Python 3.6.
 
 ## Work in Progress
-The basic MAML algorithm which uses [TRPO](https://spinningup.openai.com/en/latest/algorithms/trpo.html) as optimizing method can already be used. Examples, experiment scripts and more environments (i.e. [MetaWorld](https://github.com/rlworkgroup/metaworld)) will follow. 
+The basic MAML algorithm which uses [TRPO](https://spinningup.openai.com/en/latest/algorithms/trpo.html) as optimizing method can already be used. The first tests on Navigation task yield the same results as in the original paper. Examples, experiment scripts and more environments (i.e. [MetaWorld](https://github.com/rlworkgroup/metaworld)) will follow. 
 
 TF2 graph support with 'tf.function' will be added soon. 
 

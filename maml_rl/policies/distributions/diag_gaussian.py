@@ -11,7 +11,7 @@ EPS = 1e-8
 
 
 class DiagGaussianPdType(PdType):
-    def __init__(self, latent_shape, size, min_log_std, init_scale=1.0, init_bias=0.0):
+    def __init__(self, latent_shape, size, min_log_std, init_scale=1.0, init_bias=0.0, name=None):
         self.size = size
         self.min_log_std = min_log_std
         #self.fc = matching_fc(latent_shape, 'pd', self.size, init_scale=init_scale, init_bias=init_bias)

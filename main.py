@@ -36,12 +36,14 @@ def main(args):
                            batch_size=args.fast_batch_size,
                            num_workers=args.num_workers)
 
-    with tf.name_scope('policy'):
+    with tf.name_scope('policy') as scope:
         if continuous_actions:
             policy = NormalMLPPolicy(
                 int(np.prod(sampler.envs.observation_space.shape)),
                 int(np.prod(sampler.envs.action_space.shape)),
-                hidden_sizes=(args.hidden_size,) * args.num_layers)
+                hidden_sizes=(args.hidden_size,) * args.num_layers,
+                name=scope
+            )
         else:
             policy = CategoricalMLPPolicy(
                 int(np.prod(sampler.envs.observation_space.shape)),
@@ -50,8 +52,12 @@ def main(args):
 
     baseline = LinearFeatureBaseline(int(np.prod(sampler.envs.observation_space.shape)))
 
-    optimizer = ConjugateGradientOptimizer(args.cg_damping, args.cg_iters,
-                                           args.ls_backtrack_ratio, args.ls_max_steps, args.max_kl, policy)
+    optimizer = ConjugateGradientOptimizer(args.cg_damping,
+                                           args.cg_iters,
+                                           args.ls_backtrack_ratio,
+                                           args.ls_max_steps,
+                                           args.max_kl,
+                                           policy)
 
     metalearner = MetaLearner(sampler,
                               policy,
@@ -71,14 +77,17 @@ def main(args):
         metalearner.step(episodes)
 
         with writer.as_default():
-            tf.summary.scalar('total_rewards/before_update', total_rewards([ep.rewards for ep, _ in episodes]), batch)
-            tf.summary.scalar('total_rewards/after_update', total_rewards([ep.rewards for _, ep in episodes]), batch)
+            return_before = total_rewards([ep.rewards for ep, _ in episodes])
+            return_after = total_rewards([ep.rewards for _, ep in episodes])
+            tf.summary.scalar('total_rewards/before_update', return_before, batch)
+            tf.summary.scalar('total_rewards/after_update', return_after, batch)
+            print(f"{batch+1}:: \t Before: {return_before} \t After: {return_after}")
             writer.flush()
 
         if batch % args.save_iters == 0:
             # Save policy network
-
-            tf.saved_model.save(policy, save_folder)
+            policy.save_weights(save_folder + f"/policy-{batch+1}", overwrite=True)
+            baseline.save_weights(save_folder + f"/baseline-{batch + 1}", overwrite=True)
             print(f"Policy saved at iteration {batch+1}")
 
 

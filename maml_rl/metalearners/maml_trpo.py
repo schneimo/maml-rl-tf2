@@ -22,6 +22,10 @@ class MetaLearner(BaseMetaLearner):
     [4] John Schulman, Sergey Levine, Philipp Moritz, Michael I. Jordan, 
         Pieter Abbeel, "Trust Region Policy Optimization", 2015
         (https://arxiv.org/abs/1502.05477)
+
+    The code is adapted from
+    https://github.com/tristandeleu/pytorch-maml-rl/blob/master/maml_rl/metalearner.py
+
     """
 
     def __init__(self,
@@ -35,8 +39,6 @@ class MetaLearner(BaseMetaLearner):
                  ):
         self.sampler = sampler
         self.policy = policy
-        #with tf.name_scope('old_policy'):
-        #    self.old_policy = clone_policy(policy)
         self.baseline = baseline
         self.gamma = gamma
         self.fast_lr = fast_lr
@@ -44,8 +46,6 @@ class MetaLearner(BaseMetaLearner):
         self.optimizer = optimizer
         self.params = list()
 
-    #@tf.function
-    # episodes --> obs, actions, masks,
     def inner_loss(self, episodes, params=None):
         """
         Compute the inner loss for the one-step gradient update. The inner
@@ -54,7 +54,7 @@ class MetaLearner(BaseMetaLearner):
 
         Arguments:
             episodes:   sampled trajectories
-            params:     parameters of the policy to calculate the probs
+            params:     parameters of the policy to calculate the log-probs
         """
         values = self.baseline(episodes)
         advantages = episodes.gae(values, tau=self.tau)
@@ -69,8 +69,6 @@ class MetaLearner(BaseMetaLearner):
                               weights=episodes.mask)
         return loss
 
-    #@tf.function
-    # episodes --> returns, obs, masks, actions
     def adapt(self, episodes, first_order=False):
         """
         Adapt the parameters of the policy network to a new task, from
@@ -78,7 +76,7 @@ class MetaLearner(BaseMetaLearner):
 
         Arguments:
             episodes:       example trajectories
-            first_order:    determines if first order gradients should be used
+            first_order:     determines if first order gradients should be used (not implemented yet)
         """
         # Fit the baseline to the training episodes
         self.baseline.fit(episodes)
@@ -91,78 +89,77 @@ class MetaLearner(BaseMetaLearner):
         grads = tape.gradient(loss, self.policy.get_trainable_variables())
 
         # Get the new parameters after a one-step gradient update
-        params = self.policy.update_params(grads, step_size=self.fast_lr, first_order=first_order)
+        params = self.policy.update_params(grads, step_size=self.fast_lr)
 
         return params
 
     def sample(self, tasks, first_order=False):
         """
         Sample trajectories (before and after the update of the parameters)
-        for all the tasks `tasks`.
+        for all the tasks.
 
         Arguments:
             tasks:          different tasks to sample episodes from each one
-            first_order:    determines if first order gradients should be used
+            first_order:     determines if first order gradients should be used
         """
         episodes = []
         for idx, task in enumerate(tasks):
             self.sampler.reset_task(task)
+
+            # Yield some episodes with the current policy
             train_episodes = self.sampler.sample(self.policy,
                                                  gamma=self.gamma)
 
+            # Calculate the task related parameters for the policy
             params = self.adapt(train_episodes, first_order=first_order)
 
+            # Save the new params
             self.params.append(params)
 
+            # Yield new episodes with the new params for the meta-gradient update
             valid_episodes = self.sampler.sample(self.policy,
                                                  params=params,
                                                  gamma=self.gamma)
             episodes.append((train_episodes, valid_episodes))
         return episodes
 
-    #@tf.function
-    # episodes --> returns, obs, masks, actions
     def surrogate_loss(self, episodes, old_pis=None):
         """
+        The loss for the meta-gradient update.
 
         Arguments:
             episodes:   sampled trajectories
-            old_pis:    old policy distribution before an update
+            old_pis:    old policy distribution before the update if available
         """
         losses, kls, pis = [], [], []
         if old_pis is None:
             old_pis = [None] * len(episodes)
 
-        # TODO: Refractoring for tf.function?
         for (train_episodes, valid_episodes), old_pi in zip(episodes, old_pis):
+            # Adapt the learner to the episodes we are currently observe
             params = self.adapt(train_episodes)
             pi = self.policy(valid_episodes.observations, params=params)
             pis.append(detach_distribution(pi))
-            #with tf.name_scope('copied_policy'):
-            #    copied_policy = clone_policy(self.policy, params, with_names=True)
-            #pi = copied_policy(valid_episodes.observations)  # Returns a distribution
-            #pis.append(pi) #pis.append(detach_distribution(policy))
 
             if old_pi is None:
                 old_pi = detach_distribution(pi)
-                #self.old_policy.set_params_with_name(params)
-                #old_pi = self.old_policy(valid_episodes.observations)
 
+            # Calculate the surrogate advantage
             values = self.baseline(valid_episodes)
             advantages = valid_episodes.gae(values, tau=self.tau)
             advantages = weighted_normalize(advantages, weights=valid_episodes.mask)
 
-            # Calculate the surrogate advantage
+            # Calculate the surrogate loss with the log ratio and the advantages
             log_ratio = (pi.log_prob(valid_episodes.actions) - old_pi.log_prob(valid_episodes.actions))
             if len(log_ratio.shape) > 2:
                 log_ratio = tf.reduce_sum(log_ratio, axis=2)
             ratio = tf.exp(log_ratio)
-
             loss = -weighted_mean(ratio * advantages,
                                   axis=0,
                                   weights=valid_episodes.mask)
             losses.append(loss)
 
+            # Calculate the KL divergence between the old and the current distribution
             mask = valid_episodes.mask
             if len(valid_episodes.actions.shape) > 2:
                 mask = tf.expand_dims(mask, axis=2)

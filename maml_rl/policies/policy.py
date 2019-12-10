@@ -10,17 +10,29 @@ def weight_init(module):
         module.bias.data.zero_()
 
 
-class Policy(tf.Module):
-    def __init__(self, input_size, output_size):
-        super(Policy, self).__init__()
+class Policy(tf.keras.Model):
+    def __init__(self, input_size, output_size, name=None):
+        """
+        Base class for the policies.
+
+        Args:
+            input_size:     Shape of the observations
+            output_size:    Shape of the resulting actions
+            name:           Name of the scope this policy created in
+        """
+        super(Policy, self).__init__(name=name)
         self.input_size = input_size
         self.output_size = output_size
         self.all_params = OrderedDict()
 
-    def update_params(self, grads, step_size=0.5, first_order=False):
+    def update_params(self, grads, step_size=0.5):
         """Apply one step of gradient descent on the loss function `loss`, with 
         step-size `step_size`, and returns the updated parameters of the neural 
         network.
+
+        Arguments:
+            grads:      The gradients calculated w.r.t the parameters
+            step_size:  Learning rate
         """
         updated_params = OrderedDict()
         params_with_name = [(x.name, x) for x in self.get_trainable_variables()]
