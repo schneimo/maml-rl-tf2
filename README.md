@@ -15,11 +15,11 @@ This script was tested with Python 3.6.
 ## Work in Progress
 The basic MAML algorithm which uses [TRPO](https://spinningup.openai.com/en/latest/algorithms/trpo.html) as optimizing method can already be used. The first tests on the very simple navigation environment *2DNavigation-v0* yield the same results as the original paper. 
 
-Examples, experiment scripts and more environments (i.e. [MetaWorld](https://github.com/rlworkgroup/metaworld)) will follow. 
+- Examples, experiment scripts and more environments (i.e. [MetaWorld](https://github.com/rlworkgroup/metaworld)) will follow. 
 
-TF2 graph support with 'tf.function' will be added soon. 
+- TF2 graph support with *'tf.function'* will be added soon. 
 
-In the future more variations like [CAVIA](https://github.com/lmzintgraf/cavia), [ProMP](https://github.com/jonasrothfuss/ProMP), etc. will be implemented also.
+- In the future more variations like [CAVIA](https://github.com/lmzintgraf/cavia), [ProMP](https://github.com/jonasrothfuss/ProMP), etc. will be implemented also.
 
 ## References
 This project is, for the most part, a reproduction of the original implementation [cbfinn/maml_rl](https://github.com/cbfinn/maml_rl/) in TensorFlow 2. The experiments are based on the paper
