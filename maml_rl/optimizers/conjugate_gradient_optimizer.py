@@ -90,10 +90,12 @@ class ConjugateGradientOptimizer(BaseOptimizer):
                 # First derivative
                 grads = inner_tape.gradient(kl, train_vars)
                 flat_grad_kl = flatgrad(grads, train_vars)
+                assert np.isfinite(flat_grad_kl).all(), 'gradient not finite'
                 grad_kl_v = tf.tensordot(flat_grad_kl, vector, axes=1)
             # Second derivative
             grad2s = outter_tape.gradient(grad_kl_v, train_vars)  # TODO: gradients are not calculated correctly
             flat_grad2_kl = flatgrad(grad2s, train_vars)
+            assert np.isfinite(flat_grad2_kl).all(), 'second gradient not finite'
 
             return flat_grad2_kl + damping * vector
 

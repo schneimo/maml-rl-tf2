@@ -2,6 +2,7 @@ import tensorflow as tf
 
 from maml_rl.metalearners.basemetalearner import BaseMetaLearner
 from maml_rl.utils.tf_utils import weighted_mean, weighted_normalize, flatgrad, clone_policy, detach_distribution
+import numpy as np
 
 
 class MetaLearner(BaseMetaLearner):
@@ -186,5 +187,6 @@ class MetaLearner(BaseMetaLearner):
             old_loss, _, old_pis = self.surrogate_loss(episodes)
         grads = tape.gradient(old_loss, train_vars)
         grads = flatgrad(grads, train_vars)
+        assert np.isfinite(grads).all(), 'gradient not finite'
 
         self.optimizer.optimize(grads, episodes, self.params)
