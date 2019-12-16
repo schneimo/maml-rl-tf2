@@ -103,7 +103,7 @@ def make_pdtype(latent_shape, ac_space, init_scale=1.0):
 
 def detach_distribution(pi):
     if isinstance(pi, CategoricalPd):
-        distribution = CategoricalPd(logits=pi.logits)
+        distribution = CategoricalPd(logits=tf.identity(pi.logits.numpy()))
     elif isinstance(pi, DiagGaussianPd):
         mean = tf.identity(pi.mean.numpy())
         logstd = tf.Variable(tf.identity(pi.logstd.numpy()), name='old_pi/logstd', trainable=False, dtype=tf.float32) # TODO: trainable=True?

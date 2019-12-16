@@ -23,17 +23,20 @@ class CategoricalMLPPolicy(Policy):
         self.num_layers = len(hidden_sizes) + 1
         self.params = []
 
-        layer_sizes = (input_size,) + hidden_sizes + (output_size,)
+        layer_sizes = (input_size,) + hidden_sizes #+ (output_size,)
         w_init = keras.initializers.glorot_uniform()
         b_init = tf.zeros_initializer()
+
         for i in range(1, self.num_layers):
-            weight = tf.Variable(initial_value=w_init(shape=(layer_sizes[i - 1], layer_sizes[i]), dtype='float32'),
-                                 name='layer{0}/weight'.format(i),
-                                 trainable=True)
-            bias = tf.Variable(initial_value=b_init(shape=(layer_sizes[i],), dtype='float32'),
-                               name='layer{0}/bias'.format(i),
-                               trainable=True)
-            self.params.append((weight, bias))
+            with tf.name_scope(f'layer{i}'):
+                weight = tf.Variable(initial_value=w_init(shape=(layer_sizes[i - 1], layer_sizes[i]), dtype='float32'),
+                                     name='weight',
+                                     trainable=True)
+                self.all_params[weight.name] = weight
+                bias = tf.Variable(initial_value=b_init(shape=(layer_sizes[i],), dtype='float32'),
+                                   name='bias',
+                                   trainable=True)
+                self.all_params[bias.name] = bias
 
         with tf.name_scope('pd'):
             weight = tf.Variable(initial_value=w_init(shape=(layer_sizes[-1], output_size), dtype='float32'),
@@ -49,7 +52,7 @@ class CategoricalMLPPolicy(Policy):
         self._dist = CategoricalPdType((layer_sizes[-1],), output_size)
 
     def get_trainable_variables(self):
-        return self.trainable_variables + self._dist.trainable_variables
+        return list(self.trainable_variables) + list(self._dist.trainable_variables)
 
     def forward(self, x, params=None):
         if params is None:
@@ -61,15 +64,15 @@ class CategoricalMLPPolicy(Policy):
         # Forward pass through the MLP layers
         output = tf.convert_to_tensor(x)
         for i in range(1, self.num_layers):
-            layer_name = self.scope + f'/layer{i}/'
-            weight = params_dict[layer_name + 'weight:0'.format(i)]
-            bias = params_dict[layer_name + 'bias:0'.format(i)]
+            layer_name = self.name + f'layer{i}/'
+            weight = params_dict[layer_name + 'weight:0']
+            bias = params_dict[layer_name + 'bias:0']
             output = tf.matmul(output, weight)
             output = tf.add(output, bias)
             output = self.nonlinearity(output)
 
-        weight = params_dict[self.scope + "/pd/kernel:0"]
-        bias = params_dict[self.scope + "/pd/bias:0"]
+        weight = params_dict[self.name + "pd/kernel:0"]
+        bias = params_dict[self.name + "pd/bias:0"]
         output = tf.matmul(output, weight)
         logit = tf.add(output, bias)
 

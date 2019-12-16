@@ -36,6 +36,7 @@ def main(args):
                            batch_size=args.fast_batch_size,
                            num_workers=args.num_workers)
 
+    # Create policy for the given task
     with tf.name_scope('policy') as scope:
         if continuous_actions:
             policy = NormalMLPPolicy(
@@ -48,7 +49,9 @@ def main(args):
             policy = CategoricalMLPPolicy(
                 int(np.prod(sampler.envs.observation_space.shape)),
                 sampler.envs.action_space.n,
-                hidden_sizes=(args.hidden_size,) * args.num_layers)
+                hidden_sizes=(args.hidden_size,) * args.num_layers,
+                name=scope
+            )
 
     baseline = LinearFeatureBaseline(int(np.prod(sampler.envs.observation_space.shape)))
 
@@ -84,7 +87,7 @@ def main(args):
             print(f"{batch+1}:: \t Before: {return_before} \t After: {return_after}")
             writer.flush()
 
-        if batch % args.save_iters == 0:
+        if (batch+1) % args.save_iters == 0:
             # Save policy network
             policy.save_weights(save_folder + f"/policy-{batch+1}", overwrite=True)
             baseline.save_weights(save_folder + f"/baseline-{batch + 1}", overwrite=True)
