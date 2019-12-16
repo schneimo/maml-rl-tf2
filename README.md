@@ -2,8 +2,6 @@
 
 <p align="center"> 
 <img src="_assets/0_without_gradient.gif">
-</p>
-<p align="center"> 
 <img src="_assets/1_one_gradient_step.gif">
 </p>
 
