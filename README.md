@@ -1,4 +1,4 @@
-# Reinforcement Learning with Model-Agnostic Meta-Learning (MAML) in TensorFlow 2
+# Reinforcement Learning with Model-Agnostic Meta-Learning (MAML) in TensorFlow 2 (TF2)
 
 <p align="center"> 
 <img src="_assets/0_without_gradient.gif">
