@@ -5,9 +5,9 @@
 <img src="_assets/1_one_gradient_step.gif">
 </p>
 
-(So far) Basic implementation of *Model-Agnostic Meta-Learning (MAML)* applied on Reinforcement Learning problems in TensorFlow 2. 
+Implementation of *Model-Agnostic Meta-Learning (MAML)* applied on Reinforcement Learning problems in TensorFlow 2. 
 
-This repo is heavily inspired by the original implementation [cbfinn/maml_rl](https://github.com/cbfinn/maml_rl/) (TensorFlow 1.x) and the very fantastic implementations of Tristan Deleu from MILA [tristandeleu/pytorch-maml-rl](https://github.com/tristandeleu/pytorch-maml-rl) (PyTorch) and Jonas Rothfuss [jonasrothfuss/ProMP](https://github.com/jonasrothfuss/ProMP) (TensorFlow 1.x). 
+This repo is heavily inspired by the original implementation [cbfinn/maml_rl](https://github.com/cbfinn/maml_rl/) (TensorFlow 1.x) as well as the fantastic implementations of Tristan Deleu ([tristandeleu/pytorch-maml-rl](https://github.com/tristandeleu/pytorch-maml-rl) (PyTorch)) and Jonas Rothfuss )[jonasrothfuss/ProMP](https://github.com/jonasrothfuss/ProMP) (TensorFlow 1.x)). 
 
 I totally recommend to check out all three implementations too.
 
@@ -19,7 +19,7 @@ python main.py --env-name 2DNavigation-v0 --num-workers 20 --fast-lr 0.1 --max-k
 This script was tested with Python 3.6.
 
 ## Work in Progress
-The basic MAML algorithm which uses [TRPO](https://spinningup.openai.com/en/latest/algorithms/trpo.html) as optimizing method can already be used. The first tests on the very simple navigation environment *2DNavigation-v0* yield the same results as the original paper. 
+The original MAML algorithm for RL which uses [TRPO](https://spinningup.openai.com/en/latest/algorithms/trpo.html) as optimization method can already be used. Tests with *2DNavigation-v0* and *HalfCheetahDir-v1* environments yield the same results as the original paper. 
 
 - Examples, experiment scripts and more environments (i.e. [MetaWorld](https://github.com/rlworkgroup/metaworld)) will follow. 
 
