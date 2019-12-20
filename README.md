@@ -7,7 +7,7 @@
 
 Implementation of *Model-Agnostic Meta-Learning (MAML)* applied on Reinforcement Learning problems in TensorFlow 2. 
 
-This repo is heavily inspired by the original implementation [cbfinn/maml_rl](https://github.com/cbfinn/maml_rl/) (TensorFlow 1.x) as well as the fantastic implementations of Tristan Deleu ([tristandeleu/pytorch-maml-rl](https://github.com/tristandeleu/pytorch-maml-rl) (PyTorch)) and Jonas Rothfuss )[jonasrothfuss/ProMP](https://github.com/jonasrothfuss/ProMP) (TensorFlow 1.x)). 
+This repo is heavily inspired by the original implementation [cbfinn/maml_rl](https://github.com/cbfinn/maml_rl/) (TensorFlow 1.x) as well as the fantastic implementations of Tristan Deleu ([tristandeleu/pytorch-maml-rl](https://github.com/tristandeleu/pytorch-maml-rl) (PyTorch)) and Jonas Rothfuss ([jonasrothfuss/ProMP](https://github.com/jonasrothfuss/ProMP) (TensorFlow 1.x)). 
 
 I totally recommend to check out all three implementations too.
 
