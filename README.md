@@ -7,25 +7,21 @@
 
 Implementation of *Model-Agnostic Meta-Learning (MAML)* applied on Reinforcement Learning problems in TensorFlow 2. 
 
-This repo is heavily inspired by the original implementation [cbfinn/maml_rl](https://github.com/cbfinn/maml_rl/) (TensorFlow 1.x) as well as the fantastic implementations of Tristan Deleu ([tristandeleu/pytorch-maml-rl](https://github.com/tristandeleu/pytorch-maml-rl) (PyTorch)) and Jonas Rothfuss ([jonasrothfuss/ProMP](https://github.com/jonasrothfuss/ProMP) (TensorFlow 1.x)). 
+This repo is heavily inspired by the original implementation [cbfinn/maml_rl](https://github.com/cbfinn/maml_rl/) (TensorFlow 1.x) as well as the fantastic implementations of Tristan Deleu ([tristandeleu/pytorch-maml-rl](https://github.com/tristandeleu/pytorch-maml-rl) (PyTorch)) and Jonas Rothfuss ([jonasrothfuss/ProMP](https://github.com/jonasrothfuss/ProMP) (TensorFlow 1.x)). I totally recommend to check out all three implementations too.
 
-I totally recommend to check out all three implementations too.
+The original MAML algorithm uses [TRPO](https://spinningup.openai.com/en/latest/algorithms/trpo.html) as optimization method and so far this is also integrated in this version. Tests with *2DNavigation-v0* and *HalfCheetahDir-v1* environments yield the same results as the original paper. Better TF2 graph support with `tf.function` and more variations of MAML (i.e. [CAVIA](https://github.com/lmzintgraf/cavia), [ProMP](https://github.com/jonasrothfuss/ProMP), etc.) might be added soon. 
 
 ## Usage
 You can use the [`main.py`](main.py) script in order to train the algorithm with MAML.
 ```
 python main.py --env-name 2DNavigation-v0 --num-workers 20 --fast-lr 0.1 --max-kl 0.01 --fast-batch-size 20 --meta-batch-size 40 --num-layers 2 --hidden-size 100 --num-batches 500 --gamma 0.99 --tau 1.0 --cg-damping 1e-5 --ls-max-steps 15
 ```
-This script was tested with Python 3.6.
 
-## Work in Progress
-The original MAML algorithm for RL which uses [TRPO](https://spinningup.openai.com/en/latest/algorithms/trpo.html) as optimization method can already be used. Tests with *2DNavigation-v0* and *HalfCheetahDir-v1* environments yield the same results as the original paper. 
-
-- Examples, experiment scripts and more environments (i.e. [MetaWorld](https://github.com/rlworkgroup/metaworld)) will follow. 
-
-- TF2 graph support with *'tf.function'* will be added soon. 
-
-- In the future more variations like [CAVIA](https://github.com/lmzintgraf/cavia), [ProMP](https://github.com/jonasrothfuss/ProMP), etc. will be implemented also.
+To evaluate the trained agent, just run
+```
+python experiments.py
+```
+Both scripts were tested with Python 3.6.
 
 ## References
 This project is, for the most part, a reproduction of the original implementation [cbfinn/maml_rl](https://github.com/cbfinn/maml_rl/) in TensorFlow 2. The experiments are based on the paper
